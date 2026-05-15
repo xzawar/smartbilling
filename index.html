@@ -527,6 +527,8 @@ body { padding-top: env(safe-area-inset-top); }
   <button id="update-reload-btn" onclick="location.reload()">Refresh</button>
 </div>
 
+<div id="overlay-mobile"></div>
+
 <!-- ════════ PWA: INSTALL BANNER ════════ -->
 <div id="pwa-install-banner">
   <div class="install-icon">📲</div>
@@ -986,12 +988,13 @@ body { padding-top: env(safe-area-inset-top); }
 ══════════════════════════════════════════════════════════════ */
 
 const firebaseConfig = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+  apiKey: "AIzaSyCxevALzekf5aoDKzWy8Zqv1sUabQpgYfc",
+  authDomain: "smartbilling-786.firebaseapp.com",
+  projectId: "smartbilling-786",
+  storageBucket: "smartbilling-786.firebasestorage.app",
+  messagingSenderId: "731641373519",
+  appId: "1:731641373519:web:8a78614d04976faddd5b3a",
+  measurementId: "G-Y29EXDE92Z"
 };
 
 // Secret code that grants Admin role during signup
@@ -1319,9 +1322,11 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('hamburger').classList.remove('open');
-  document.getElementById('overlay-mobile').style.display = 'none';
+  const overlay = document.getElementById('overlay-mobile');
+  if (overlay) overlay.style.display = 'none';
 }
-document.getElementById('overlay-mobile').onclick = closeSidebar;
+const overlayMobile = document.getElementById('overlay-mobile');
+if (overlayMobile) overlayMobile.onclick = closeSidebar;
 
 const pageTitles = { dashboard:'📊 Dashboard', billing:'🧾 Billing', inventory:'📦 Inventory', history:'📋 Invoice History', account:'👤 My Account', settings:'⚙️ Settings', admin:'🛡️ Admin Panel' };
 
@@ -1922,7 +1927,7 @@ function adminExportAllUsers() {
 /* ══════════════════════════════════════════════════════════════
    TOAST
 ══════════════════════════════════════════════════════════════ */
-const TOAST_ICONS = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+var TOAST_ICONS = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
 function toast(msg, type='success') {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');

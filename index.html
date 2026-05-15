@@ -1,0 +1,2108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Smart Billing & Inventory System v4.0 — Cloud Edition</title>
+
+<!-- ══ PWA MANIFEST & META ══ -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1E3A8A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SmartBilling">
+<meta name="application-name" content="SmartBilling">
+<meta name="description" content="Cloud-powered billing and inventory management system">
+<meta name="msapplication-TileColor" content="#1E3A8A">
+<meta name="msapplication-TileImage" content="icons/icon-144.png">
+
+<!-- ══ ICONS ══ -->
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-96.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+
+<!-- ══ FIREBASE SDK (compat mode — works without a bundler) ══ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+════════════════════════════════════════════════════════════════ */
+:root {
+  --royal-blue: #1E3A8A;
+  --royal-purple: #5B21B6;
+  --gold: #D4AF37;
+  --gold-light: #F4D03F;
+  --white: #FFFFFF;
+  --bg: #F0F4FF;
+  --surface: rgba(255,255,255,0.85);
+  --text: #1F2937;
+  --text-muted: #6B7280;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  --info: #3B82F6;
+  --gradient-main: linear-gradient(135deg, #1E3A8A, #5B21B6);
+  --gradient-gold: linear-gradient(135deg, #D4AF37, #F4D03F);
+  --shadow: 0 8px 32px rgba(30,58,138,0.15);
+  --shadow-gold: 0 4px 20px rgba(212,175,55,0.4);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --sidebar-width: 260px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Poppins',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+
+/* ── ANIMATED BACKGROUND ── */
+.floating-orb { position:fixed; border-radius:50%; filter:blur(60px); pointer-events:none; z-index:0; opacity:.35; animation:floatOrb 10s ease-in-out infinite; }
+.orb1 { width:400px; height:400px; background:radial-gradient(circle, #1E3A8A55, transparent); top:-100px; left:-100px; animation-delay:0s; }
+.orb2 { width:300px; height:300px; background:radial-gradient(circle, #5B21B655, transparent); bottom:0; right:-80px; animation-delay:-4s; }
+.orb3 { width:200px; height:200px; background:radial-gradient(circle, #D4AF3755, transparent); top:50%; left:40%; animation-delay:-7s; }
+@keyframes floatOrb { 0%,100%{transform:translate(0,0) scale(1);} 33%{transform:translate(30px,-20px) scale(1.05);} 66%{transform:translate(-20px,15px) scale(.95);} }
+
+/* ══════════════════════════════════════════════════════════════
+   LOADING SCREEN
+══════════════════════════════════════════════════════════════ */
+#loading-screen {
+  position:fixed; inset:0; z-index:9999;
+  background:var(--gradient-main);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:24px; transition:opacity .5s;
+}
+#loading-screen.hidden { opacity:0; pointer-events:none; }
+.loading-logo { font-family:'Montserrat',sans-serif; font-size:28px; font-weight:900; color:#fff; }
+.loading-logo span { color:var(--gold-light); }
+.loading-bar { width:200px; height:4px; background:rgba(255,255,255,.2); border-radius:4px; overflow:hidden; }
+.loading-bar-fill { height:100%; width:0; background:var(--gold-light); border-radius:4px; animation:loadFill 1.5s ease forwards; }
+@keyframes loadFill { to{width:100%;} }
+.loading-sub { color:rgba(255,255,255,.6); font-size:13px; }
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH SCREEN
+══════════════════════════════════════════════════════════════ */
+#auth-screen {
+  position:fixed; inset:0; z-index:5000;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+#auth-screen.hidden { display:none; }
+
+.auth-bg {
+  position:absolute; inset:0;
+  background:linear-gradient(135deg, #0f1e5c 0%, #1E3A8A 40%, #5B21B6 100%);
+}
+
+.auth-card {
+  position:relative; z-index:1;
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(20px);
+  border-radius:24px;
+  padding:40px;
+  width:100%; max-width:440px;
+  box-shadow:0 40px 80px rgba(0,0,0,.35);
+  animation:authSlideIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes authSlideIn { from{opacity:0;transform:translateY(30px) scale(.96);} to{opacity:1;transform:translateY(0) scale(1);} }
+
+.auth-logo { text-align:center; margin-bottom:28px; }
+.auth-logo h1 { font-family:'Montserrat',sans-serif; font-size:24px; font-weight:900; color:var(--royal-blue); }
+.auth-logo h1 span { color:var(--royal-purple); }
+.auth-logo p { font-size:12px; color:var(--text-muted); margin-top:4px; }
+.auth-logo .cloud-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  background:linear-gradient(135deg,#D4AF3722,#F4D03F22);
+  border:1px solid #D4AF3755;
+  padding:4px 12px; border-radius:20px;
+  font-size:11px; font-weight:700; color:#B8860B;
+  margin-top:8px;
+}
+
+.auth-tabs { display:flex; margin-bottom:24px; background:#F3F4F6; border-radius:10px; padding:4px; }
+.auth-tab { flex:1; padding:9px; border:none; background:none; cursor:pointer; font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; color:var(--text-muted); border-radius:8px; transition:all .2s; }
+.auth-tab.active { background:#fff; color:var(--royal-blue); box-shadow:0 2px 8px rgba(0,0,0,.1); }
+
+.auth-form { display:none; }
+.auth-form.active { display:block; }
+
+.auth-field { margin-bottom:16px; }
+.auth-field label { display:block; font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+.auth-field input {
+  width:100%; padding:11px 14px; border-radius:10px;
+  border:1.5px solid #E5E7EB;
+  font-family:'Poppins',sans-serif; font-size:13px; color:var(--text);
+  background:#fff; transition:all .2s; outline:none;
+}
+.auth-field input:focus { border-color:var(--royal-blue); box-shadow:0 0 0 3px rgba(30,58,138,.1); }
+
+.auth-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.auth-options { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; font-size:12px; }
+.auth-check { display:flex; align-items:center; gap:8px; color:var(--text-muted); cursor:pointer; }
+.auth-check input { width:auto; }
+.auth-link { color:var(--royal-blue); font-weight:600; background:none; border:none; cursor:pointer; font-size:12px; font-family:'Poppins',sans-serif; }
+.auth-link:hover { text-decoration:underline; }
+
+.auth-btn {
+  width:100%; padding:13px; border:none; border-radius:10px;
+  background:var(--gradient-main); color:#fff;
+  font-family:'Poppins',sans-serif; font-size:14px; font-weight:700;
+  cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.auth-btn:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(30,58,138,.4); }
+.auth-btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+.auth-error {
+  background:#FEE2E2; border:1px solid #FECACA; color:#991B1B;
+  padding:10px 14px; border-radius:8px; font-size:12px;
+  margin-bottom:16px; display:none;
+}
+.auth-error.show { display:block; }
+
+.auth-divider { position:relative; text-align:center; margin:20px 0; }
+.auth-divider::before { content:''; position:absolute; top:50%; left:0; right:0; height:1px; background:#E5E7EB; }
+.auth-divider span { position:relative; background:#fff; padding:0 12px; font-size:11px; color:var(--text-muted); font-weight:600; }
+
+.auth-admin-note {
+  background:#EFF6FF; border:1px solid #DBEAFE; color:#1E3A8A;
+  padding:10px 14px; border-radius:8px; font-size:11px;
+  margin-top:16px; line-height:1.5;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAIN APP LAYOUT
+══════════════════════════════════════════════════════════════ */
+#main-app { display:none; position:relative; z-index:1; }
+#main-app.visible { display:block; }
+
+.app { display:flex; min-height:100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width:var(--sidebar-width); min-width:var(--sidebar-width);
+  background:var(--gradient-main);
+  display:flex; flex-direction:column;
+  box-shadow:4px 0 30px rgba(30,58,138,.3);
+  position:fixed; top:0; left:0; height:100vh; z-index:100;
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+  overflow-y:auto;
+}
+.sidebar-logo { padding:28px 24px 20px; border-bottom:1px solid rgba(255,255,255,.1); }
+.sidebar-logo h1 { font-family:'Montserrat',sans-serif; font-size:18px; font-weight:900; color:#fff; line-height:1.2; }
+.sidebar-logo h1 span { color:var(--gold); }
+.sidebar-logo p { color:rgba(255,255,255,.5); font-size:11px; margin-top:4px; }
+.sidebar-user-chip {
+  margin-top:10px; padding:6px 10px; border-radius:8px;
+  background:rgba(255,255,255,.1); display:flex; align-items:center; gap:8px;
+}
+.sidebar-user-chip .avatar { width:24px; height:24px; border-radius:50%; background:var(--gold); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#1a1a1a; flex-shrink:0; }
+.sidebar-user-chip .info { overflow:hidden; }
+.sidebar-user-chip .uname { color:#fff; font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sidebar-user-chip .uemail { color:rgba(255,255,255,.5); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sidebar-user-chip .role-tag { font-size:9px; font-weight:800; padding:2px 6px; border-radius:4px; background:var(--gold); color:#1a1a1a; margin-left:auto; flex-shrink:0; }
+
+.nav-section { padding:16px 12px; flex:1; }
+.nav-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.4); letter-spacing:1.5px; text-transform:uppercase; padding:0 12px; margin-bottom:8px; margin-top:8px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:var(--radius-sm); color:rgba(255,255,255,.7); font-size:14px; font-weight:500; cursor:pointer; transition:all .2s; margin-bottom:4px; border:none; background:none; width:100%; text-align:left; }
+.nav-item:hover { background:rgba(255,255,255,.1); color:#fff; }
+.nav-item.active { background:rgba(255,255,255,.15); color:#fff; box-shadow:inset 3px 0 0 var(--gold); }
+.nav-item .icon { font-size:18px; width:22px; text-align:center; flex-shrink:0; }
+.nav-item.admin-only { display:none; }
+
+.sidebar-footer { padding:16px; border-top:1px solid rgba(255,255,255,.1); }
+.sidebar-footer p { color:rgba(255,255,255,.4); font-size:11px; text-align:center; }
+
+/* MAIN */
+.main { flex:1; display:flex; flex-direction:column; min-width:0; margin-left:var(--sidebar-width); transition:margin-left .3s cubic-bezier(.4,0,.2,1); }
+
+/* TOPBAR */
+.topbar { background:var(--surface); backdrop-filter:blur(20px); padding:16px 28px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(30,58,138,.08); position:sticky; top:0; z-index:10; box-shadow:0 2px 16px rgba(30,58,138,.06); }
+.topbar-left { display:flex; align-items:center; gap:16px; }
+.topbar h2 { font-family:'Montserrat',sans-serif; font-size:22px; font-weight:800; color:var(--royal-blue); }
+.topbar-right { display:flex; align-items:center; gap:16px; }
+.topbar-date { color:var(--text-muted); font-size:13px; }
+.topbar-badge { background:var(--gradient-main); color:#fff; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
+.cloud-indicator { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--success); font-weight:600; }
+.cloud-dot { width:7px; height:7px; border-radius:50%; background:var(--success); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+.hamburger { display:none; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:4px; }
+.hamburger span { display:block; width:22px; height:2px; background:var(--royal-blue); border-radius:2px; transition:all .3s; }
+.hamburger.open span:nth-child(1) { transform:translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity:0; }
+.hamburger.open span:nth-child(3) { transform:translateY(-7px) rotate(-45deg); }
+
+#overlay-mobile { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:90; backdrop-filter:blur(2px); }
+
+.content { padding:28px; flex:1; }
+
+/* PAGE SYSTEM */
+.page { display:none; }
+.page.active { display:block; animation:fadeInUp .3s ease; }
+@keyframes fadeInUp { from{opacity:0;transform:translateY(16px);} to{opacity:1;transform:translateY(0);} }
+
+/* STAT CARDS */
+.stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:28px; }
+.stat-card { background:var(--surface); backdrop-filter:blur(20px); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.8); position:relative; overflow:hidden; transition:transform .25s,box-shadow .25s; cursor:default; transform-style:preserve-3d; }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:var(--gradient-main); }
+.stat-card.gold::before { background:var(--gradient-gold); }
+.stat-card.success::before { background:linear-gradient(135deg,#10B981,#34D399); }
+.stat-card.danger::before { background:linear-gradient(135deg,#EF4444,#F87171); }
+.stat-card:hover { transform:translateY(-4px); box-shadow:0 16px 40px rgba(30,58,138,.2); }
+.stat-icon { font-size:32px; margin-bottom:12px; }
+.stat-value { font-family:'Montserrat',sans-serif; font-size:28px; font-weight:900; color:var(--royal-blue); }
+.stat-label { font-size:12px; color:var(--text-muted); font-weight:500; margin-top:4px; }
+
+/* PRINT CARDS */
+.print-cards-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px; }
+.print-card { background:var(--surface); backdrop-filter:blur(20px); border-radius:var(--radius); padding:28px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.8); display:flex; align-items:center; justify-content:space-between; gap:20px; transition:transform .25s,box-shadow .25s; }
+.print-card:hover { transform:translateY(-3px); box-shadow:0 16px 40px rgba(30,58,138,.2); }
+.print-card-info { flex:1; }
+.print-card-icon { font-size:44px; opacity:.8; }
+.print-card-title { font-family:'Montserrat',sans-serif; font-size:15px; font-weight:800; color:var(--royal-blue); margin-bottom:4px; }
+.print-card-desc { font-size:12px; color:var(--text-muted); }
+
+/* CARDS */
+.card { background:var(--surface); backdrop-filter:blur(20px); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.8); margin-bottom:24px; }
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(30,58,138,.08); flex-wrap:wrap; gap:12px; }
+.card-title { font-family:'Montserrat',sans-serif; font-size:16px; font-weight:800; color:var(--royal-blue); }
+
+/* BUTTONS */
+.btn { padding:10px 22px; border-radius:var(--radius-sm); font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:all .2s; display:inline-flex; align-items:center; gap:8px; }
+.btn-primary { background:var(--gradient-main); color:#fff; box-shadow:0 4px 15px rgba(30,58,138,.3); }
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(30,58,138,.4); }
+.btn-gold { background:var(--gradient-gold); color:#1a1a1a; box-shadow:var(--shadow-gold); }
+.btn-gold:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(212,175,55,.5); }
+.btn-danger { background:linear-gradient(135deg,#EF4444,#DC2626); color:#fff; }
+.btn-danger:hover { transform:translateY(-2px); }
+.btn-sm { padding:6px 14px; font-size:12px; }
+.btn-outline { background:transparent; border:1.5px solid var(--royal-blue); color:var(--royal-blue); }
+.btn-outline:hover { background:var(--royal-blue); color:#fff; }
+.btn-success { background:linear-gradient(135deg,#10B981,#059669); color:#fff; }
+.btn-success:hover { transform:translateY(-2px); }
+.btn-warning { background:linear-gradient(135deg,#F59E0B,#D97706); color:#fff; }
+.btn-warning:hover { transform:translateY(-2px); }
+
+/* FORMS */
+.form-group { margin-bottom:16px; }
+.form-label { display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+.form-control { width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1.5px solid rgba(30,58,138,.15); font-family:'Poppins',sans-serif; font-size:13px; color:var(--text); background:rgba(255,255,255,.9); transition:border-color .2s,box-shadow .2s; outline:none; }
+.form-control:focus { border-color:var(--royal-blue); box-shadow:0 0 0 3px rgba(30,58,138,.1); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+/* TABLES */
+.table-wrap { overflow-x:auto; border-radius:var(--radius-sm); }
+table { width:100%; border-collapse:collapse; min-width:500px; }
+thead { background:var(--gradient-main); }
+thead th { padding:12px 16px; text-align:left; color:#fff; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+tbody tr { border-bottom:1px solid rgba(30,58,138,.06); transition:background .15s; }
+tbody tr:hover { background:rgba(30,58,138,.03); }
+tbody td { padding:12px 16px; font-size:13px; color:var(--text); }
+
+/* BADGES */
+.badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; display:inline-block; }
+.badge-success { background:#D1FAE5; color:#065F46; }
+.badge-warning { background:#FEF3C7; color:#92400E; }
+.badge-danger { background:#FEE2E2; color:#991B1B; }
+.badge-info { background:#DBEAFE; color:#1E3A8A; }
+.badge-purple { background:#EDE9FE; color:#5B21B6; }
+.badge-blocked { background:#FEE2E2; color:#991B1B; font-weight:800; }
+
+/* BILLING */
+.billing-grid { display:grid; grid-template-columns:1fr 360px; gap:24px; }
+.billing-items-table td { vertical-align:middle; }
+.billing-items-table input { width:70px; padding:6px 8px; border:1.5px solid rgba(30,58,138,.15); border-radius:8px; font-family:'Poppins',sans-serif; font-size:12px; outline:none; text-align:center; }
+.billing-items-table input:focus { border-color:var(--royal-blue); }
+.search-wrap { position:relative; }
+.suggestions { position:absolute; top:100%; left:0; right:0; z-index:100; background:#fff; border-radius:var(--radius-sm); box-shadow:0 8px 32px rgba(30,58,138,.2); border:1px solid rgba(30,58,138,.1); max-height:200px; overflow-y:auto; display:none; }
+.suggestions.show { display:block; }
+.suggestion-item { padding:10px 14px; cursor:pointer; font-size:13px; border-bottom:1px solid rgba(30,58,138,.05); transition:background .15s; display:flex; justify-content:space-between; align-items:center; }
+.suggestion-item:hover { background:rgba(30,58,138,.05); }
+.suggestion-item .sug-price { color:var(--royal-blue); font-weight:700; font-size:12px; }
+.suggestion-item .sug-stock { color:var(--text-muted); font-size:11px; }
+
+.invoice-summary { background:var(--surface); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,.8); height:fit-content; position:sticky; top:80px; }
+.invoice-summary h3 { font-family:'Montserrat',sans-serif; font-size:15px; font-weight:800; color:var(--royal-blue); margin-bottom:16px; }
+.summary-line { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; }
+.summary-line.total { border-top:2px solid var(--royal-blue); margin-top:8px; padding-top:12px; font-weight:800; font-size:15px; color:var(--royal-blue); }
+
+/* MODALS */
+.modal-overlay { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; padding:20px; }
+.modal-overlay.show { display:flex; }
+.modal { background:#fff; border-radius:var(--radius); width:100%; max-width:600px; max-height:90vh; overflow-y:auto; box-shadow:0 24px 80px rgba(0,0,0,.3); }
+.modal-header { padding:20px 24px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; }
+.modal-close { background:none; border:none; font-size:22px; cursor:pointer; color:#999; }
+.modal-body { padding:24px; }
+.modal-footer { padding:16px 24px; border-top:1px solid #eee; display:flex; gap:12px; justify-content:flex-end; }
+
+/* INVOICE PRINT */
+.invoice-print { font-family:'Poppins',sans-serif; }
+.inv-header { text-align:center; padding:16px 0 12px; border-bottom:2px solid var(--royal-blue); margin-bottom:16px; }
+.inv-header h2 { font-family:'Montserrat',sans-serif; font-size:22px; font-weight:900; color:var(--royal-blue); }
+.inv-header p { font-size:12px; color:#666; }
+.inv-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; font-size:12px; }
+.inv-info-block p { margin-bottom:3px; }
+.inv-info-block strong { color:var(--royal-blue); }
+.inv-table { width:100%; border-collapse:collapse; margin-bottom:16px; font-size:12px; }
+.inv-table th { background:var(--royal-blue); color:#fff; padding:8px 10px; text-align:left; }
+.inv-table td { padding:7px 10px; border-bottom:1px solid #eee; }
+.inv-totals { text-align:right; font-size:12px; }
+.inv-totals .grand { font-size:16px; font-weight:800; color:var(--royal-blue); margin-top:6px; }
+.inv-footer { text-align:center; margin-top:20px; padding-top:12px; border-top:1px dashed #ccc; font-size:11px; color:#888; }
+
+/* SETTINGS / ACCOUNT / ADMIN */
+.settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.admin-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:28px; }
+.profile-avatar { width:80px; height:80px; border-radius:50%; background:var(--gradient-main); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:16px; }
+
+/* ADMIN USER TABLE */
+.user-table-wrap { overflow-x:auto; }
+.user-row-blocked { background:rgba(239,68,68,.04) !important; }
+.user-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+/* SAVING INDICATOR */
+.saving-indicator {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:var(--royal-blue); color:#fff;
+  padding:8px 20px; border-radius:20px; font-size:12px; font-weight:600;
+  box-shadow:0 4px 20px rgba(30,58,138,.4);
+  display:flex; align-items:center; gap:8px;
+  opacity:0; transition:opacity .3s; pointer-events:none; z-index:500;
+}
+.saving-indicator.show { opacity:1; }
+.spin { animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg);} }
+
+/* TOAST */
+#toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px; }
+.toast { background:#fff; border-radius:12px; padding:14px 18px; box-shadow:0 8px 32px rgba(0,0,0,.15); display:flex; align-items:center; gap:12px; min-width:260px; max-width:340px; animation:slideInRight .3s ease, fadeOut .3s ease 2.7s forwards; border-left:4px solid var(--success); }
+.toast.error { border-left-color:var(--danger); }
+.toast.warning { border-left-color:var(--warning); }
+.toast.info { border-left-color:var(--info); }
+.toast-icon { font-size:18px; }
+.toast-msg { font-size:13px; font-weight:500; color:var(--text); }
+@keyframes slideInRight { from{transform:translateX(100px);opacity:0;} to{transform:translateX(0);opacity:1;} }
+@keyframes fadeOut { to{opacity:0;transform:translateX(50px);} }
+
+/* MISC */
+.empty-state { text-align:center; padding:48px 20px; color:var(--text-muted); }
+.empty-state .empty-icon { font-size:48px; margin-bottom:12px; opacity:.4; }
+.empty-state p { font-size:14px; }
+.chip { display:inline-block; padding:3px 10px; background:rgba(30,58,138,.08); color:var(--royal-blue); border-radius:20px; font-size:11px; font-weight:600; }
+
+/* ══ PWA ADDITIONS ══ */
+/* Safe area insets for iPhone notch / Dynamic Island */
+body { padding-top: env(safe-area-inset-top); }
+.sidebar { padding-top: env(safe-area-inset-top); height: calc(100vh - env(safe-area-inset-top)); top: env(safe-area-inset-top); }
+.topbar { padding-left: max(28px, env(safe-area-inset-left)); padding-right: max(28px, env(safe-area-inset-right)); }
+.saving-indicator { bottom: calc(24px + env(safe-area-inset-bottom)); }
+#toast-container { top: calc(20px + env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right)); }
+
+/* Install Banner */
+#pwa-install-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 9000;
+  background: var(--gradient-main);
+  color: #fff;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 14px;
+  box-shadow: 0 -4px 30px rgba(30,58,138,.4);
+  transform: translateY(100%);
+  transition: transform .4s cubic-bezier(.34,1.2,.64,1);
+  border-radius: 20px 20px 0 0;
+}
+#pwa-install-banner.show { transform: translateY(0); }
+#pwa-install-banner .install-icon { font-size: 32px; flex-shrink: 0; }
+#pwa-install-banner .install-text { flex: 1; }
+#pwa-install-banner .install-text strong { display: block; font-size: 14px; font-weight: 700; }
+#pwa-install-banner .install-text span { font-size: 12px; opacity: .75; }
+#pwa-install-banner .install-actions { display: flex; gap: 8px; flex-shrink: 0; }
+#pwa-install-btn {
+  background: var(--gold); color: #1a1a1a;
+  border: none; border-radius: 8px;
+  padding: 9px 16px; font-family: 'Poppins', sans-serif;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  white-space: nowrap;
+}
+#pwa-dismiss-btn {
+  background: rgba(255,255,255,.15); color: #fff;
+  border: none; border-radius: 8px;
+  padding: 9px 12px; font-family: 'Poppins', sans-serif;
+  font-size: 13px; cursor: pointer;
+}
+
+/* Offline Indicator */
+#offline-banner {
+  position: fixed; top: env(safe-area-inset-top); left: 0; right: 0;
+  z-index: 8999;
+  background: #F59E0B; color: #1a1a1a;
+  padding: 8px 20px; text-align: center;
+  font-size: 13px; font-weight: 600;
+  display: none;
+  animation: slideDown .3s ease;
+}
+#offline-banner.show { display: block; }
+@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+/* Update Available Banner */
+#update-banner {
+  position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  z-index: 8999;
+  background: var(--royal-purple); color: #fff;
+  padding: 10px 20px; border-radius: 20px;
+  font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 20px rgba(91,33,182,.4);
+  display: none; align-items: center; gap: 10px;
+  white-space: nowrap;
+}
+#update-banner.show { display: flex; }
+#update-reload-btn {
+  background: #fff; color: var(--royal-purple);
+  border: none; border-radius: 12px;
+  padding: 4px 12px; font-size: 12px; font-weight: 700;
+  cursor: pointer; font-family: 'Poppins', sans-serif;
+}
+
+/* Splash / standalone mode tweaks */
+@media (display-mode: standalone) {
+  .topbar { padding-top: max(16px, env(safe-area-inset-top)); }
+  .cloud-indicator::after { content: ' · PWA'; opacity: .5; }
+}
+
+  body * { visibility:hidden !important; }
+  .printable,.printable * { visibility:visible !important; }
+  .printable { position:absolute; left:0; top:0; width:100%; padding:20px; }
+  .modal-overlay { background:none !important; backdrop-filter:none !important; }
+  .modal-header,.modal-footer { display:none !important; }
+  .modal { box-shadow:none !important; border-radius:0 !important; max-width:100% !important; max-height:none !important; overflow:visible !important; }
+  .modal-body { padding:0 !important; }
+  @page { size:A4 portrait; margin:15mm; }
+  body { background:white !important; }
+  .invoice-print,.print-doc { page-break-inside:avoid; }
+  .inv-header h2,.inv-info strong,.inv-totals .grand { color:#1E3A8A !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .inv-table th { background:#1E3A8A !important; color:white !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+
+/* RESPONSIVE */
+@media (max-width:1280px) { .stats-grid { grid-template-columns:repeat(2,1fr); } .admin-stats { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:1024px) { .billing-grid { grid-template-columns:1fr; } .invoice-summary { position:static; } .settings-grid { grid-template-columns:1fr; } .print-cards-grid { grid-template-columns:1fr; } }
+@media (max-width:768px) {
+  .hamburger { display:flex; }
+  .sidebar { transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); }
+  .main { margin-left:0; }
+  .content { padding:16px; }
+  .stats-grid { grid-template-columns:1fr 1fr; gap:14px; }
+  .stat-card { padding:18px; }
+  .stat-value { font-size:22px; }
+  .form-row { grid-template-columns:1fr; }
+  .topbar { padding:14px 16px; }
+  .topbar h2 { font-size:17px; }
+  .topbar-date { display:none; }
+  .billing-grid { grid-template-columns:1fr; }
+  .admin-stats { grid-template-columns:1fr 1fr; }
+  .auth-row { grid-template-columns:1fr; }
+}
+@media (max-width:480px) { .stats-grid { grid-template-columns:1fr; } .print-cards-grid { grid-template-columns:1fr; } .topbar-badge { display:none; } .admin-stats { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+  <h1>Hello world  </h1>
+
+<!-- ════════ PWA: OFFLINE BANNER ════════ -->
+<div id="offline-banner">
+  📵 You're offline — data will sync when connection is restored
+</div>
+
+<!-- ════════ PWA: UPDATE BANNER ════════ -->
+<div id="update-banner">
+  🆕 Update available!
+  <button id="update-reload-btn" onclick="location.reload()">Refresh</button>
+</div>
+
+<!-- ════════ PWA: INSTALL BANNER ════════ -->
+<div id="pwa-install-banner">
+  <div class="install-icon">📲</div>
+  <div class="install-text">
+    <strong>Install SmartBilling App</strong>
+    <span>Add to home screen — works offline, no app store needed</span>
+  </div>
+  <div class="install-actions">
+    <button id="pwa-install-btn">Install</button>
+    <button id="pwa-dismiss-btn">✕</button>
+  </div>
+</div>
+
+<!-- ════════ FLOATING ORBS ════════ -->
+<div class="orb1 floating-orb"></div>
+<div class="orb2 floating-orb"></div>
+<div class="orb3 floating-orb"></div>
+
+<!-- ════════ LOADING SCREEN ════════ -->
+<div id="loading-screen">
+  <div class="loading-logo">Smart <span>Billing</span></div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <div class="loading-sub">☁️ Connecting to cloud…</div>
+</div>
+
+<!-- ════════ TOAST ════════ -->
+<div id="toast-container"></div>
+
+<!-- ════════ SAVING INDICATOR ════════ -->
+<div class="saving-indicator" id="saving-indicator">
+  <span class="spin">⟳</span> Syncing to cloud…
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     AUTH SCREEN
+════════════════════════════════════════════════════════════ -->
+<div id="auth-screen" class="hidden">
+  <div class="auth-bg"></div>
+  <!-- auth orbs -->
+  <div class="floating-orb" style="width:350px;height:350px;background:radial-gradient(circle,#D4AF3733,transparent);top:-80px;right:-80px;opacity:.5;"></div>
+  <div class="floating-orb" style="width:250px;height:250px;background:radial-gradient(circle,#5B21B633,transparent);bottom:-60px;left:-60px;opacity:.5;animation-delay:-3s;"></div>
+
+  <div class="auth-card">
+    <div class="auth-logo">
+      <h1>Smart <span>Billing</span></h1>
+      <p>& Inventory Management System</p>
+      <div class="cloud-badge">☁️ Cloud Edition v4.0</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('signup')">Create Account</button>
+    </div>
+
+    <!-- Error -->
+    <div class="auth-error" id="auth-error"></div>
+
+    <!-- LOGIN FORM -->
+    <div class="auth-form active" id="auth-login-form">
+      <div class="auth-field">
+        <label>Email Address</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <div class="auth-options">
+        <label class="auth-check">
+          <input type="checkbox" id="login-remember" /> Remember Me
+        </label>
+        <button class="auth-link" onclick="handleForgotPassword()">Forgot Password?</button>
+      </div>
+      <button class="auth-btn" id="login-btn" onclick="handleLogin()">
+        🔐 Sign In to Your Account
+      </button>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div class="auth-form" id="auth-signup-form">
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Full Name *</label>
+          <input type="text" id="signup-name" placeholder="Ali Hassan" />
+        </div>
+        <div class="auth-field">
+          <label>Shop Name</label>
+          <input type="text" id="signup-shop" placeholder="My Store" />
+        </div>
+      </div>
+      <div class="auth-field">
+        <label>Email Address *</label>
+        <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Password *</label>
+          <input type="password" id="signup-password" placeholder="Min 6 characters" />
+        </div>
+        <div class="auth-field">
+          <label>Confirm Password *</label>
+          <input type="password" id="signup-confirm" placeholder="Re-enter password" />
+        </div>
+      </div>
+      <div class="auth-field">
+        <label>Admin Code <span style="color:#888;font-weight:400;text-transform:none">(optional — grants admin access)</span></label>
+        <input type="text" id="signup-admin-code" placeholder="Leave blank for regular account" />
+      </div>
+      <button class="auth-btn" id="signup-btn" onclick="handleSignup()">
+        🚀 Create Account
+      </button>
+      <div class="auth-admin-note">
+        ℹ️ To set up the first Admin account, enter the Admin Code you configured in the settings below. Regular accounts only access their own data.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     MAIN APP
+════════════════════════════════════════════════════════════ -->
+<div id="main-app">
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <h1>Smart <span>Billing</span></h1>
+      <p>& Inventory System v4.0 ☁️</p>
+      <div class="sidebar-user-chip" id="sidebar-user-chip">
+        <div class="avatar" id="sidebar-avatar">?</div>
+        <div class="info">
+          <div class="uname" id="sidebar-uname">Loading…</div>
+          <div class="uemail" id="sidebar-uemail"></div>
+        </div>
+        <span class="role-tag" id="sidebar-role-tag">USER</span>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Main Menu</div>
+      <button class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">📊</span><span>Dashboard</span></button>
+      <button class="nav-item" onclick="showPage('billing',this)"><span class="icon">🧾</span><span>Billing</span></button>
+      <button class="nav-item" onclick="showPage('inventory',this)"><span class="icon">📦</span><span>Inventory</span></button>
+      <button class="nav-item" onclick="showPage('history',this)"><span class="icon">📋</span><span>Invoice History</span></button>
+      <div class="nav-label" style="margin-top:16px">Account</div>
+      <button class="nav-item" onclick="showPage('account',this)"><span class="icon">👤</span><span>My Account</span></button>
+      <button class="nav-item" onclick="showPage('settings',this)"><span class="icon">⚙️</span><span>Settings</span></button>
+      <button class="nav-item admin-only" id="nav-admin" onclick="showPage('admin',this)"><span class="icon">🛡️</span><span>Admin Panel</span></button>
+      <button class="nav-item" onclick="handleLogout()"><span class="icon">🔐</span><span>Logout</span></button>
+    </div>
+    <div class="sidebar-footer"><p>© 2026 Smart Billing v4.0 Cloud</p></div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main" id="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></button>
+        <h2 id="pageTitle">📊 Dashboard</h2>
+      </div>
+      <div class="topbar-right">
+        <div class="cloud-indicator"><div class="cloud-dot"></div><span>Cloud Sync Active</span></div>
+        <span class="topbar-date" id="currentDate"></span>
+        <span class="topbar-badge">v4.0 Cloud</span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div class="page active" id="page-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value" id="stat-total-products">0</div><div class="stat-label">Total Products</div></div>
+          <div class="stat-card gold"><div class="stat-icon">🧾</div><div class="stat-value" id="stat-total-invoices">0</div><div class="stat-label">Invoices Generated</div></div>
+          <div class="stat-card success"><div class="stat-icon">💰</div><div class="stat-value" id="stat-total-revenue">Rs.0</div><div class="stat-label">Total Revenue</div></div>
+          <div class="stat-card danger"><div class="stat-icon">⚠️</div><div class="stat-value" id="stat-low-stock">0</div><div class="stat-label">Low Stock Items</div></div>
+        </div>
+        <div class="print-cards-grid">
+          <div class="print-card"><div class="print-card-info"><div class="print-card-title">📦 Print Inventory List</div><div class="print-card-desc">Print all products with prices, quantities, categories & stock status</div><button class="btn btn-primary" style="margin-top:16px" onclick="printInventoryList()">🖨️ Print Inventory List</button></div><div class="print-card-icon">📋</div></div>
+          <div class="print-card"><div class="print-card-info"><div class="print-card-title">📋 Print Sales History</div><div class="print-card-desc">Print all invoice records with totals, summary & complete sales report</div><button class="btn btn-gold" style="margin-top:16px" onclick="printSalesHistory()">🖨️ Print Sales History</button></div><div class="print-card-icon">📊</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">📋 Recent Invoices</span><button class="btn btn-sm btn-outline" onclick="showPage('history',document.querySelector('[onclick*=history]'))">View All</button></div>
+            <div id="dash-recent-invoices"><div class="empty-state"><div class="empty-icon">🧾</div><p>No invoices yet</p></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">📦 Low Stock Alert</span></div>
+            <div id="dash-low-stock"><div class="empty-state"><div class="empty-icon">✅</div><p>All stock levels healthy</p></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ BILLING ══ -->
+      <div class="page" id="page-billing">
+        <div class="billing-grid">
+          <div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">👤 Customer Information</span><span class="chip" id="invoice-id-display">INV-#0000</span></div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Customer Name *</label><input class="form-control" id="customerName" placeholder="Enter customer name" /></div>
+                <div class="form-group"><label class="form-label">Phone Number</label><input class="form-control" id="customerPhone" placeholder="+92 300 0000000" /></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Address</label><input class="form-control" id="customerAddress" placeholder="Street, City" /></div>
+                <div class="form-group"><label class="form-label">Cashier Name</label><input class="form-control" id="cashierName" placeholder="Cashier / Staff" /></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">🔍 Add Products</span></div>
+              <div class="search-wrap">
+                <input class="form-control" id="productSearch" placeholder="🔍 Type product name to search…" oninput="handleProductSearch()" onblur="hideSuggestions()" autocomplete="off" />
+                <div class="suggestions" id="suggestions"></div>
+              </div>
+              <div class="table-wrap" style="margin-top:16px">
+                <table class="billing-items-table">
+                  <thead><tr><th>#</th><th>Product</th><th>Price</th><th>Qty</th><th>Total</th><th>✕</th></tr></thead>
+                  <tbody id="billing-items-body"><tr id="billing-empty-row"><td colspan="6"><div class="empty-state" style="padding:24px"><div class="empty-icon">🛒</div><p>Search and add products above</p></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="invoice-summary">
+              <h3>🧾 Invoice Summary</h3>
+              <div class="form-group"><label class="form-label">Discount (Rs.)</label><input class="form-control" id="discountAmount" type="number" value="0" min="0" oninput="updateSummary()" /></div>
+              <div class="form-group"><label class="form-label">Tax (%)</label><input class="form-control" id="taxPercent" type="number" value="0" min="0" oninput="updateSummary()" /></div>
+              <div class="summary-line"><span>Subtotal</span><span id="sum-subtotal">Rs.0</span></div>
+              <div class="summary-line"><span>Discount</span><span id="sum-discount">- Rs.0</span></div>
+              <div class="summary-line"><span>Tax</span><span id="sum-tax">+ Rs.0</span></div>
+              <div class="summary-line total"><span>Grand Total</span><span id="sum-grand">Rs.0</span></div>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:20px" onclick="generateInvoice()">🧾 Generate Invoice</button>
+              <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:8px" onclick="clearBilling()">✕ Clear Bill</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ INVENTORY ══ -->
+      <div class="page" id="page-inventory">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📦 Product Inventory</span>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input class="form-control" id="invSearch" placeholder="🔍 Search products…" oninput="renderInventory()" style="width:220px" />
+              <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Product Name</th><th>Category</th><th>Price</th><th>Qty</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="inventory-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ HISTORY ══ -->
+      <div class="page" id="page-history">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Invoice History</span>
+            <button class="btn btn-sm btn-danger" onclick="clearHistory()">🗑️ Clear History</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Invoice ID</th><th>Customer</th><th>Date</th><th>Items</th><th>Amount</th><th>Action</th></tr></thead>
+              <tbody id="history-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ ACCOUNT ══ -->
+      <div class="page" id="page-account">
+        <div class="card" style="max-width:600px">
+          <div class="card-header"><span class="card-title">👤 My Account</span></div>
+          <div style="display:flex;align-items:center;gap:20px;margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid rgba(30,58,138,.08)">
+            <div class="profile-avatar" id="acc-avatar-display">👤</div>
+            <div>
+              <div style="font-family:Montserrat;font-weight:800;font-size:18px;color:var(--royal-blue)" id="acc-display-name">Shop Owner</div>
+              <div style="color:var(--text-muted);font-size:13px" id="acc-display-email">owner@smartbilling.com</div>
+              <div style="margin-top:6px" id="acc-role-display"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-control" id="acc-name" /></div>
+            <div class="form-group"><label class="form-label">Email (read-only)</label><input class="form-control" id="acc-email" readonly style="background:#f9f9f9;color:#888" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Phone</label><input class="form-control" id="acc-phone" placeholder="+92 300 0000000" /></div>
+            <div class="form-group"><label class="form-label">Shop Name</label><input class="form-control" id="acc-shop" /></div>
+          </div>
+          <div class="form-group"><label class="form-label">Address</label><input class="form-control" id="acc-address" placeholder="Shop address" /></div>
+          <div style="display:flex;gap:12px;margin-top:8px">
+            <button class="btn btn-primary" onclick="saveAccount()">💾 Save Account</button>
+            <button class="btn btn-outline" onclick="loadAccountForm()">↺ Reset</button>
+          </div>
+        </div>
+
+        <!-- Change Password -->
+        <div class="card" style="max-width:600px">
+          <div class="card-header"><span class="card-title">🔑 Change Password</span></div>
+          <div class="form-group"><label class="form-label">New Password</label><input class="form-control" id="new-password" type="password" placeholder="Min 6 characters" /></div>
+          <div class="form-group"><label class="form-label">Confirm New Password</label><input class="form-control" id="confirm-new-password" type="password" placeholder="Re-enter new password" /></div>
+          <button class="btn btn-primary" onclick="changePassword()">🔑 Update Password</button>
+        </div>
+      </div>
+
+      <!-- ══ SETTINGS ══ -->
+      <div class="page" id="page-settings">
+        <div class="card">
+          <div class="card-header"><span class="card-title">⚙️ System Settings</span></div>
+          <div class="settings-grid">
+            <div>
+              <div style="font-family:Montserrat;font-weight:800;font-size:14px;color:var(--royal-blue);margin-bottom:16px">🏪 Business Settings</div>
+              <div class="form-group"><label class="form-label">Business Name</label><input class="form-control" id="set-biz-name" /></div>
+              <div class="form-group"><label class="form-label">Invoice Prefix</label><input class="form-control" id="set-inv-prefix" /></div>
+              <div class="form-group"><label class="form-label">Default Tax (%)</label><input class="form-control" id="set-tax" type="number" value="0" min="0" max="100" /></div>
+              <div class="form-group"><label class="form-label">Currency Symbol</label><input class="form-control" id="set-currency" value="Rs." /></div>
+            </div>
+            <div>
+              <div style="font-family:Montserrat;font-weight:800;font-size:14px;color:var(--royal-blue);margin-bottom:16px">🖨️ Print Settings</div>
+              <div class="form-group"><label class="form-label">Invoice Footer Message</label><input class="form-control" id="set-footer" value="Thank you for your business!" /></div>
+              <div class="form-group"><label class="form-label">Low Stock Threshold</label><input class="form-control" id="set-low-stock" type="number" value="10" min="1" /></div>
+              <div class="form-group"><label class="form-label">Return Policy (Days)</label><input class="form-control" id="set-returns" type="number" value="7" min="0" /></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:8px">
+            <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+            <button class="btn btn-outline" onclick="resetSettings()">↺ Reset to Defaults</button>
+          </div>
+        </div>
+        <div class="card" style="border:1.5px solid rgba(239,68,68,.3)">
+          <div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ Danger Zone</span></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn btn-danger" onclick="clearAllData()">🗑️ Clear All My Data</button>
+            <button class="btn btn-outline" style="border-color:var(--danger);color:var(--danger)" onclick="exportData()">📥 Export My Data</button>
+          </div>
+          <p style="font-size:12px;color:var(--text-muted);margin-top:12px">Warning: Clearing all data will permanently delete all your inventory and invoice records from the cloud. This cannot be undone.</p>
+        </div>
+      </div>
+
+      <!-- ══ ADMIN PAGE ══ -->
+      <div class="page" id="page-admin">
+
+        <!-- Admin Stat Cards -->
+        <div class="admin-stats">
+          <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value" id="admin-user-count">—</div><div class="stat-label">Registered Users</div></div>
+          <div class="stat-card gold"><div class="stat-icon">🔴</div><div class="stat-value" id="admin-blocked-count">—</div><div class="stat-label">Blocked Accounts</div></div>
+          <div class="stat-card success"><div class="stat-icon">🟢</div><div class="stat-value">Online</div><div class="stat-label">System Status</div></div>
+          <div class="stat-card"><div class="stat-icon">☁️</div><div class="stat-value">Firebase</div><div class="stat-label">Cloud Storage</div></div>
+        </div>
+
+        <!-- User Management -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">👥 User Management</span>
+            <div style="display:flex;gap:10px;align-items:center">
+              <input class="form-control" id="admin-search" placeholder="🔍 Search users…" oninput="filterAdminUsers()" style="width:220px" />
+              <button class="btn btn-primary btn-sm" onclick="loadAdminUsers()">↺ Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap user-table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Shop</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+              <tbody id="admin-users-body"><tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👥</div><p>Loading users…</p></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- System Analytics -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">📊 Admin Tools</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px">
+            <button class="btn btn-primary" onclick="adminExportAllUsers()" style="justify-content:center;padding:16px;flex-direction:column;gap:6px;height:auto"><span style="font-size:22px">📋</span><span>Export User List</span></button>
+            <button class="btn btn-gold" onclick="showPage('settings',document.querySelector('[onclick*=settings]'))" style="justify-content:center;padding:16px;flex-direction:column;gap:6px;height:auto"><span style="font-size:22px">⚙️</span><span>System Settings</span></button>
+          </div>
+        </div>
+
+      </div><!-- /admin -->
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+</div><!-- /main-app -->
+
+<!-- ════════════════════════════════════════════════════════════
+     MODALS
+════════════════════════════════════════════════════════════ -->
+
+<!-- Invoice Modal -->
+<div class="modal-overlay" id="invoiceModal">
+  <div class="modal">
+    <div class="modal-header"><span style="font-family:Montserrat;font-weight:800;color:var(--royal-blue);font-size:16px">🧾 Invoice Preview</span><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body printable" id="invoicePrintArea"></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Close</button><button class="btn btn-primary" onclick="window.print()">🖨️ Print Invoice</button></div>
+  </div>
+</div>
+
+<!-- Inventory Print Modal -->
+<div class="modal-overlay" id="invPrintModal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><span style="font-family:Montserrat;font-weight:800;color:var(--royal-blue);font-size:16px">📦 Inventory List Preview</span><button class="modal-close" onclick="document.getElementById('invPrintModal').classList.remove('show')">✕</button></div>
+    <div class="modal-body printable" id="invPrintArea"></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="document.getElementById('invPrintModal').classList.remove('show')">Close</button><button class="btn btn-primary" onclick="window.print()">🖨️ Print Inventory</button></div>
+  </div>
+</div>
+
+<!-- Sales Print Modal -->
+<div class="modal-overlay" id="salesPrintModal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><span style="font-family:Montserrat;font-weight:800;color:var(--royal-blue);font-size:16px">📋 Sales History Preview</span><button class="modal-close" onclick="document.getElementById('salesPrintModal').classList.remove('show')">✕</button></div>
+    <div class="modal-body printable" id="salesPrintArea"></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="document.getElementById('salesPrintModal').classList.remove('show')">Close</button><button class="btn btn-primary" onclick="window.print()">🖨️ Print Sales Report</button></div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header"><span style="font-family:Montserrat;font-weight:800;color:var(--royal-blue);font-size:16px" id="productModalTitle">Add Product</span><button class="modal-close" onclick="closeProductModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Product Name *</label><input class="form-control" id="pName" placeholder="e.g. Basmati Rice" /></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Price (Rs.) *</label><input class="form-control" id="pPrice" type="number" min="0" placeholder="0" /></div>
+        <div class="form-group"><label class="form-label">Quantity *</label><input class="form-control" id="pQty" type="number" min="0" placeholder="0" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Category</label><input class="form-control" id="pCategory" placeholder="e.g. Grocery, Electronics…" /></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeProductModal()">Cancel</button><button class="btn btn-primary" onclick="saveProduct()">💾 Save Product</button></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     SCRIPT
+════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════════════
+   ▶ FIREBASE CONFIGURATION
+   ──────────────────────────────────────────────────────────────
+   SETUP INSTRUCTIONS:
+   1. Go to https://console.firebase.google.com
+   2. Create a new project (or use existing)
+   3. Go to Project Settings → Your Apps → Add Web App
+   4. Copy the firebaseConfig values below and replace the
+      placeholder strings with your actual values.
+   5. Enable Authentication → Email/Password sign-in method
+   6. Enable Firestore Database (start in test mode)
+   7. Set the ADMIN_SECRET_CODE below to any secret phrase.
+      Users who enter this code during signup get Admin role.
+══════════════════════════════════════════════════════════════ */
+
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+
+// Secret code that grants Admin role during signup
+const ADMIN_SECRET_CODE = "ADMIN2024";
+
+/* ══════════════════════════════════════════════════════════════
+   FIREBASE INIT
+══════════════════════════════════════════════════════════════ */
+let auth, db, currentUser = null, currentUserRole = 'user';
+
+try {
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db   = firebase.firestore();
+  // Enable offline persistence for better UX
+  db.enablePersistence().catch(() => {});
+} catch(e) {
+  console.error('Firebase init error:', e);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   IN-MEMORY CACHE (loaded from Firestore on login)
+   Keeps UI fast — all reads use cache, writes go to cache+cloud
+══════════════════════════════════════════════════════════════ */
+let cache = { inventory:[], invoices:[], settings:{}, account:{}, counter:1000 };
+
+// ── READ HELPERS (sync, use cache) ──
+const getInventory = () => cache.inventory;
+const getInvoices  = () => cache.invoices;
+const getSettings  = () => cache.settings;
+const getAccount   = () => cache.account;
+
+// ── WRITE HELPERS (update cache + async save to Firestore) ──
+let saveTimer = null;
+
+function showSaving() {
+  document.getElementById('saving-indicator').classList.add('show');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => document.getElementById('saving-indicator').classList.remove('show'), 1800);
+}
+
+function userDataRef(doc) {
+  return db.collection('users').doc(currentUser.uid).collection('data').doc(doc);
+}
+
+async function saveInventory(inv) {
+  cache.inventory = inv;
+  showSaving();
+  await userDataRef('inventory').set({ items: inv });
+}
+
+async function saveInvoices(inv) {
+  cache.invoices = inv;
+  showSaving();
+  await userDataRef('invoices').set({ items: inv });
+}
+
+async function saveSettingsData(s) {
+  cache.settings = s;
+  showSaving();
+  await userDataRef('settings').set(s);
+}
+
+async function saveAccountData(a) {
+  cache.account = { ...cache.account, ...a };
+  showSaving();
+  await db.collection('users').doc(currentUser.uid).update(a);
+}
+
+async function saveCounter(n) {
+  cache.counter = n;
+  await userDataRef('counter').set({ value: n });
+}
+
+function getNextInvoiceId() {
+  cache.counter++;
+  const prefix = getSettings().invoicePrefix || 'INV';
+  saveCounter(cache.counter);
+  return prefix + '-' + cache.counter;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOAD USER DATA FROM FIRESTORE
+══════════════════════════════════════════════════════════════ */
+async function loadUserData(uid) {
+  try {
+    const [invDoc, invoiceDoc, settingsDoc, counterDoc, userDoc] = await Promise.all([
+      userDataRef('inventory').get(),
+      userDataRef('invoices').get(),
+      userDataRef('settings').get(),
+      userDataRef('counter').get(),
+      db.collection('users').doc(uid).get()
+    ]);
+
+    cache.inventory = invDoc.exists    ? (invDoc.data().items    || []) : [];
+    cache.invoices  = invoiceDoc.exists? (invoiceDoc.data().items|| []) : [];
+    cache.settings  = settingsDoc.exists ? settingsDoc.data()    : {};
+    cache.counter   = counterDoc.exists  ? (counterDoc.data().value || 1000) : 1000;
+    cache.account   = userDoc.exists     ? userDoc.data()        : {};
+
+    // If new user, seed sample products
+    if (!cache.inventory.length) {
+      const samples = [
+        { id:1001, name:'Basmati Rice', price:250, quantity:50, category:'Grocery', createdAt:new Date().toISOString() },
+        { id:1002, name:'Wheat Flour',  price:180, quantity:30, category:'Grocery', createdAt:new Date().toISOString() },
+        { id:1003, name:'Cooking Oil',  price:420, quantity:15, category:'Grocery', createdAt:new Date().toISOString() },
+        { id:1004, name:'Sugar',        price:120, quantity:5,  category:'Grocery', createdAt:new Date().toISOString() },
+        { id:1005, name:'Tea Leaves',   price:300, quantity:0,  category:'Grocery', createdAt:new Date().toISOString() },
+        { id:1006, name:'Mobile Cable', price:150, quantity:20, category:'Electronics', createdAt:new Date().toISOString() },
+        { id:1007, name:'LED Bulb',     price:200, quantity:35, category:'Electronics', createdAt:new Date().toISOString() },
+        { id:1008, name:'Soap Bar',     price:60,  quantity:80, category:'Personal Care', createdAt:new Date().toISOString() },
+      ];
+      await saveInventory(samples);
+    }
+
+  } catch(e) {
+    console.error('loadUserData error:', e);
+    toast('Error loading cloud data. Please refresh.', 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH STATE HANDLER
+══════════════════════════════════════════════════════════════ */
+auth.onAuthStateChanged(async user => {
+  hideLoading();
+  if (user) {
+    currentUser = user;
+    // Load user profile from Firestore
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    if (!userDoc.exists) {
+      // shouldn't happen but handle gracefully
+      await auth.signOut();
+      showAuthScreen();
+      return;
+    }
+    const profile = userDoc.data();
+
+    // Check if blocked
+    if (profile.blocked) {
+      await auth.signOut();
+      showAuthScreen();
+      showAuthError('Your account has been blocked by the administrator. Please contact support.');
+      return;
+    }
+
+    currentUserRole = profile.role || 'user';
+
+    // Load user data
+    await loadUserData(user.uid);
+
+    // Update UI
+    updateSidebarUser(profile, currentUserRole);
+    applyRoleUI(currentUserRole);
+
+    // Show app
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.add('visible');
+
+    // Init dashboard
+    refreshDashboard();
+    document.getElementById('currentDate').textContent = formatDateTime();
+
+  } else {
+    currentUser = null;
+    document.getElementById('main-app').classList.remove('visible');
+    showAuthScreen();
+  }
+});
+
+function hideLoading() {
+  const ls = document.getElementById('loading-screen');
+  ls.classList.add('hidden');
+  setTimeout(() => ls.style.display = 'none', 600);
+}
+
+function showAuthScreen() {
+  document.getElementById('auth-screen').classList.remove('hidden');
+}
+
+function updateSidebarUser(profile, role) {
+  const name  = profile.name  || 'User';
+  const email = profile.email || '';
+  document.getElementById('sidebar-uname').textContent = name;
+  document.getElementById('sidebar-uemail').textContent = email;
+  document.getElementById('sidebar-avatar').textContent = name[0].toUpperCase();
+  document.getElementById('sidebar-role-tag').textContent = role.toUpperCase();
+  if (role === 'admin') document.getElementById('sidebar-role-tag').style.background = '#EF4444';
+}
+
+function applyRoleUI(role) {
+  if (role === 'admin') {
+    document.getElementById('nav-admin').classList.add('active');
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH UI
+══════════════════════════════════════════════════════════════ */
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup')));
+  document.getElementById('auth-login-form').classList.toggle('active', tab==='login');
+  document.getElementById('auth-signup-form').classList.toggle('active', tab==='signup');
+  hideAuthError();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.classList.add('show');
+}
+function hideAuthError() { document.getElementById('auth-error').classList.remove('show'); }
+
+async function handleLogin() {
+  hideAuthError();
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const remember = document.getElementById('login-remember').checked;
+
+  if (!email || !password) return showAuthError('Please enter email and password.');
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = '⏳ Signing in…';
+
+  try {
+    const persistence = remember
+      ? firebase.auth.Auth.Persistence.LOCAL
+      : firebase.auth.Auth.Persistence.SESSION;
+    await auth.setPersistence(persistence);
+    await auth.signInWithEmailAndPassword(email, password);
+    // onAuthStateChanged handles the rest
+  } catch(e) {
+    showAuthError(friendlyAuthError(e.code));
+    btn.disabled = false; btn.innerHTML = '🔐 Sign In to Your Account';
+  }
+}
+
+async function handleSignup() {
+  hideAuthError();
+  const name    = document.getElementById('signup-name').value.trim();
+  const shop    = document.getElementById('signup-shop').value.trim();
+  const email   = document.getElementById('signup-email').value.trim();
+  const pass    = document.getElementById('signup-password').value;
+  const confirm = document.getElementById('signup-confirm').value;
+  const code    = document.getElementById('signup-admin-code').value.trim();
+
+  if (!name)  return showAuthError('Full name is required.');
+  if (!email) return showAuthError('Email address is required.');
+  if (!pass)  return showAuthError('Password is required.');
+  if (pass.length < 6) return showAuthError('Password must be at least 6 characters.');
+  if (pass !== confirm) return showAuthError('Passwords do not match.');
+
+  const role = (code === ADMIN_SECRET_CODE) ? 'admin' : 'user';
+
+  const btn = document.getElementById('signup-btn');
+  btn.disabled = true; btn.textContent = '⏳ Creating account…';
+
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    const uid  = cred.user.uid;
+
+    // Create user profile in Firestore
+    await db.collection('users').doc(uid).set({
+      name,
+      shopName: shop || name + "'s Store",
+      email,
+      phone:   '',
+      address: '',
+      role,
+      blocked: false,
+      createdAt: new Date().toISOString()
+    });
+
+    toast(`Welcome, ${name}! Account created successfully.`, 'success');
+    // onAuthStateChanged handles redirect
+  } catch(e) {
+    showAuthError(friendlyAuthError(e.code));
+    btn.disabled = false; btn.innerHTML = '🚀 Create Account';
+  }
+}
+
+async function handleForgotPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) return showAuthError('Enter your email address first, then click Forgot Password.');
+  try {
+    await auth.sendPasswordResetEmail(email);
+    hideAuthError();
+    toast('Password reset email sent! Check your inbox.', 'success');
+  } catch(e) {
+    showAuthError(friendlyAuthError(e.code));
+  }
+}
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/user-not-found':       'No account found with this email.',
+    'auth/wrong-password':       'Incorrect password. Please try again.',
+    'auth/email-already-in-use': 'This email is already registered.',
+    'auth/invalid-email':        'Please enter a valid email address.',
+    'auth/weak-password':        'Password must be at least 6 characters.',
+    'auth/too-many-requests':    'Too many attempts. Please try again later.',
+    'auth/network-request-failed':'Network error. Check your internet connection.',
+    'auth/user-disabled':        'This account has been disabled.',
+  };
+  return map[code] || 'An error occurred. Please try again.';
+}
+
+async function handleLogout() {
+  if (!confirm('Sign out of Smart Billing System?')) return;
+  cache = { inventory:[], invoices:[], settings:{}, account:{}, counter:1000 };
+  await auth.signOut();
+  toast('Signed out successfully. Goodbye! 👋', 'info');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SIDEBAR & NAVIGATION
+══════════════════════════════════════════════════════════════ */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const hb = document.getElementById('hamburger');
+  const ov = document.getElementById('overlay-mobile');
+  sidebar.classList.toggle('open');
+  hb.classList.toggle('open');
+  ov.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+  document.getElementById('overlay-mobile').style.display = 'none';
+}
+document.getElementById('overlay-mobile').onclick = closeSidebar;
+
+const pageTitles = { dashboard:'📊 Dashboard', billing:'🧾 Billing', inventory:'📦 Inventory', history:'📋 Invoice History', account:'👤 My Account', settings:'⚙️ Settings', admin:'🛡️ Admin Panel' };
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[id] || id;
+  if (id === 'dashboard') refreshDashboard();
+  if (id === 'inventory') renderInventory();
+  if (id === 'history')   renderHistory();
+  if (id === 'billing')   initBilling();
+  if (id === 'admin')     { if (currentUserRole==='admin') loadAdminUsers(); }
+  if (id === 'account')   loadAccountForm();
+  if (id === 'settings')  loadSettingsForm();
+  if (window.innerWidth <= 768) closeSidebar();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DATE HELPERS
+══════════════════════════════════════════════════════════════ */
+function formatDate(d)    { return new Date(d).toLocaleDateString('en-PK',{day:'numeric',month:'short',year:'numeric'}); }
+function formatDateTime() { return new Date().toLocaleString('en-PK',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+
+/* ══════════════════════════════════════════════════════════════
+   DASHBOARD
+══════════════════════════════════════════════════════════════ */
+function refreshDashboard() {
+  const inv      = getInventory();
+  const invoices = getInvoices();
+  const settings = getSettings();
+  const threshold = settings.lowStockThreshold || 10;
+  const revenue   = invoices.reduce((s,i) => s + (i.grand||0), 0);
+  const lowStock  = inv.filter(p => p.quantity > 0 && p.quantity <= threshold).length;
+  const currency  = settings.currency || 'Rs.';
+
+  document.getElementById('stat-total-products').textContent = inv.length;
+  document.getElementById('stat-total-invoices').textContent = invoices.length;
+  document.getElementById('stat-total-revenue').textContent  = currency + revenue.toLocaleString();
+  document.getElementById('stat-low-stock').textContent      = lowStock;
+
+  const recentEl = document.getElementById('dash-recent-invoices');
+  const recent   = [...invoices].reverse().slice(0,5);
+  recentEl.innerHTML = !recent.length
+    ? '<div class="empty-state"><div class="empty-icon">🧾</div><p>No invoices yet</p></div>'
+    : recent.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,58,138,.06);font-size:13px"><div><strong>${i.id}</strong> — ${i.customerName}<div style="color:#888;font-size:11px">${formatDate(i.date)}</div></div><strong style="color:var(--royal-blue)">${currency}${(i.grand||0).toLocaleString()}</strong></div>`).join('');
+
+  const lowEl = document.getElementById('dash-low-stock');
+  const lows  = inv.filter(p => p.quantity <= threshold);
+  lowEl.innerHTML = !lows.length
+    ? '<div class="empty-state"><div class="empty-icon">✅</div><p>All stock levels healthy</p></div>'
+    : lows.map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,58,138,.06);font-size:13px"><strong>${p.name}</strong><span class="badge ${p.quantity===0?'badge-danger':'badge-warning'}">${p.quantity===0?'Out of Stock':p.quantity+' left'}</span></div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INVENTORY
+══════════════════════════════════════════════════════════════ */
+let editingProductId = null;
+
+function openProductModal(id) {
+  editingProductId = id || null;
+  const title = document.getElementById('productModalTitle');
+  if (id) {
+    const p = getInventory().find(p => p.id === id);
+    if (!p) return;
+    title.textContent = 'Edit Product';
+    document.getElementById('pName').value     = p.name;
+    document.getElementById('pPrice').value    = p.price;
+    document.getElementById('pQty').value      = p.quantity;
+    document.getElementById('pCategory').value = p.category || '';
+  } else {
+    title.textContent = 'Add Product';
+    ['pName','pPrice','pQty','pCategory'].forEach(id => document.getElementById(id).value = '');
+  }
+  document.getElementById('productModal').classList.add('show');
+}
+function closeProductModal() {
+  document.getElementById('productModal').classList.remove('show');
+  editingProductId = null;
+}
+
+async function saveProduct() {
+  const name     = document.getElementById('pName').value.trim();
+  const price    = parseFloat(document.getElementById('pPrice').value);
+  const qty      = parseInt(document.getElementById('pQty').value);
+  const category = document.getElementById('pCategory').value.trim() || 'General';
+  if (!name)                     return toast('Product name is required!', 'error');
+  if (isNaN(price) || price < 0) return toast('Enter a valid price!', 'error');
+  if (isNaN(qty)   || qty < 0)   return toast('Enter a valid quantity!', 'error');
+  const inv = getInventory();
+  if (editingProductId) {
+    const idx = inv.findIndex(p => p.id === editingProductId);
+    if (idx === -1) return;
+    if (inv.find(p => p.name.toLowerCase() === name.toLowerCase() && p.id !== editingProductId))
+      return toast('Product with this name already exists!', 'error');
+    inv[idx] = { ...inv[idx], name, price, quantity:qty, category };
+    toast('Product updated ✓', 'success');
+  } else {
+    if (inv.find(p => p.name.toLowerCase() === name.toLowerCase()))
+      return toast('Product already exists!', 'error');
+    inv.push({ id:Date.now(), name, price, quantity:qty, category, createdAt:new Date().toISOString() });
+    toast('Product added ✓', 'success');
+  }
+  await saveInventory(inv);
+  closeProductModal();
+  renderInventory();
+}
+
+async function deleteProduct(id) {
+  if (!confirm('Delete this product?')) return;
+  await saveInventory(getInventory().filter(p => p.id !== id));
+  renderInventory();
+  toast('Product deleted.', 'warning');
+}
+
+function stockStatus(qty) {
+  const threshold = getSettings().lowStockThreshold || 10;
+  if (qty === 0)        return '<span class="badge badge-danger">Out of Stock</span>';
+  if (qty <= threshold) return '<span class="badge badge-warning">Low Stock</span>';
+  return '<span class="badge badge-success">In Stock</span>';
+}
+
+function renderInventory() {
+  const inv     = getInventory();
+  const query   = (document.getElementById('invSearch')?.value || '').toLowerCase();
+  const filtered = inv.filter(p => p.name.toLowerCase().includes(query) || (p.category||'').toLowerCase().includes(query));
+  const tbody   = document.getElementById('inventory-body');
+  const currency = getSettings().currency || 'Rs.';
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><p>${query?'No matches found':'No products yet. Add one!'}</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map((p,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="badge badge-info">${p.category||'General'}</span></td>
+      <td>${currency}${p.price.toLocaleString()}</td>
+      <td>${p.quantity}</td>
+      <td>${stockStatus(p.quantity)}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-outline" onclick="openProductModal(${p.id})">✏️ Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">🗑️</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BILLING
+══════════════════════════════════════════════════════════════ */
+let billingItems = [];
+let currentInvoiceId = '';
+
+function initBilling() {
+  if (!currentInvoiceId) {
+    currentInvoiceId = getNextInvoiceId();
+    document.getElementById('invoice-id-display').textContent = currentInvoiceId;
+  }
+  updateSummary();
+}
+
+let searchTimeout = null;
+function handleProductSearch() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const q   = document.getElementById('productSearch').value.toLowerCase();
+    const sug = document.getElementById('suggestions');
+    if (!q) { sug.classList.remove('show'); return; }
+    const inv = getInventory().filter(p => p.name.toLowerCase().includes(q));
+    if (!inv.length) { sug.classList.remove('show'); return; }
+    const currency = getSettings().currency || 'Rs.';
+    sug.innerHTML = inv.slice(0,8).map(p => `
+      <div class="suggestion-item" onmousedown="addBillingItem(${p.id})">
+        <span>${p.name}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="sug-price">${currency}${p.price}</span>
+          <span class="sug-stock">${p.quantity} in stock</span>
+        </div>
+      </div>`).join('');
+    sug.classList.add('show');
+  }, 120);
+}
+function hideSuggestions() { setTimeout(() => document.getElementById('suggestions').classList.remove('show'),150); }
+
+function addBillingItem(id) {
+  const p = getInventory().find(p => p.id === id);
+  if (!p) return;
+  if (p.quantity === 0) { toast('This product is out of stock!', 'error'); return; }
+  const existing = billingItems.find(i => i.id === id);
+  if (existing) {
+    if (existing.qty >= p.quantity) { toast('Cannot exceed available stock!', 'warning'); return; }
+    existing.qty++;
+  } else {
+    billingItems.push({ id:p.id, name:p.name, price:p.price, qty:1 });
+  }
+  document.getElementById('productSearch').value = '';
+  document.getElementById('suggestions').classList.remove('show');
+  renderBillingItems();
+  toast(`${p.name} added ✓`, 'success');
+}
+
+function renderBillingItems() {
+  const tbody = document.getElementById('billing-items-body');
+  const currency = getSettings().currency || 'Rs.';
+  if (!billingItems.length) {
+    tbody.innerHTML = `<tr id="billing-empty-row"><td colspan="6"><div class="empty-state" style="padding:24px"><div class="empty-icon">🛒</div><p>Search and add products above</p></div></td></tr>`;
+    updateSummary(); return;
+  }
+  tbody.innerHTML = billingItems.map((item,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${item.name}</td>
+      <td>${currency}${item.price}</td>
+      <td><input type="number" min="1" value="${item.qty}" onchange="updateQty(${item.id},this.value)" /></td>
+      <td><strong>${currency}${(item.price*item.qty).toLocaleString()}</strong></td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeBillingItem(${item.id})">✕</button></td>
+    </tr>`).join('');
+  updateSummary();
+}
+
+function updateQty(id, val) {
+  const item = billingItems.find(i => i.id === id);
+  if (!item) return;
+  const max = (getInventory().find(p => p.id === id) || {}).quantity || 99;
+  item.qty  = Math.max(1, Math.min(parseInt(val)||1, max));
+  renderBillingItems();
+}
+function removeBillingItem(id) { billingItems = billingItems.filter(i => i.id !== id); renderBillingItems(); }
+
+function updateSummary() {
+  const subtotal = billingItems.reduce((s,i) => s + i.price*i.qty, 0);
+  const discount = parseFloat(document.getElementById('discountAmount')?.value||0)||0;
+  const taxPct   = parseFloat(document.getElementById('taxPercent')?.value||0)||0;
+  const taxAmt   = (subtotal-discount)*taxPct/100;
+  const grand    = Math.max(0, subtotal-discount+taxAmt);
+  const currency = getSettings().currency || 'Rs.';
+  document.getElementById('sum-subtotal').textContent = `${currency}${subtotal.toLocaleString()}`;
+  document.getElementById('sum-discount').textContent = `- ${currency}${discount.toLocaleString()}`;
+  document.getElementById('sum-tax').textContent      = `+ ${currency}${taxAmt.toFixed(2)}`;
+  document.getElementById('sum-grand').textContent    = `${currency}${grand.toFixed(2)}`;
+}
+
+async function generateInvoice() {
+  const customerName = document.getElementById('customerName').value.trim();
+  if (!customerName)   return toast('Customer name is required!', 'error');
+  if (!billingItems.length) return toast('Add at least one product!', 'error');
+
+  const subtotal = billingItems.reduce((s,i) => s + i.price*i.qty, 0);
+  const discount = parseFloat(document.getElementById('discountAmount').value||0)||0;
+  const taxPct   = parseFloat(document.getElementById('taxPercent').value||0)||0;
+  const taxAmt   = (subtotal-discount)*taxPct/100;
+  const grand    = Math.max(0, subtotal-discount+taxAmt);
+
+  const invoice = {
+    id: currentInvoiceId,
+    customerName,
+    phone:   document.getElementById('customerPhone').value,
+    address: document.getElementById('customerAddress').value,
+    cashier: document.getElementById('cashierName').value,
+    items:   [...billingItems],
+    subtotal, discount, taxPct, taxAmt, grand,
+    date: new Date().toISOString()
+  };
+
+  // Update stock
+  const inv = getInventory();
+  billingItems.forEach(item => {
+    const prod = inv.find(p => p.id === item.id);
+    if (prod) prod.quantity = Math.max(0, prod.quantity - item.qty);
+  });
+  await saveInventory(inv);
+
+  const invoices = getInvoices();
+  invoices.push(invoice);
+  await saveInvoices(invoices);
+
+  showInvoiceModal(invoice);
+  toast('Invoice generated & saved to cloud! ✓', 'success');
+
+  billingItems = [];
+  currentInvoiceId = '';
+  ['customerName','customerPhone','customerAddress','cashierName'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('discountAmount').value = 0;
+  document.getElementById('taxPercent').value     = 0;
+  renderBillingItems();
+  initBilling();
+}
+
+function clearBilling() {
+  if (billingItems.length && !confirm('Clear all items?')) return;
+  billingItems = [];
+  renderBillingItems();
+  document.getElementById('discountAmount').value = 0;
+  document.getElementById('taxPercent').value     = 0;
+  toast('Bill cleared.', 'info');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INVOICE MODAL
+══════════════════════════════════════════════════════════════ */
+function showInvoiceModal(invoice) {
+  document.getElementById('invoicePrintArea').innerHTML = buildInvoiceHTML(invoice);
+  document.getElementById('invoiceModal').classList.add('show');
+}
+
+function buildInvoiceHTML(inv) {
+  const settings  = getSettings();
+  const account   = getAccount();
+  const currency  = settings.currency || 'Rs.';
+  const shopName  = account.shopName  || settings.bizName || 'SMART BILLING SYSTEM';
+  const footer    = settings.footer   || 'Thank you for your business!';
+  const returns   = settings.returns  || 7;
+  const rows = inv.items.map((item,i) => `<tr><td>${i+1}</td><td>${item.name}</td><td>${item.qty}</td><td>${currency}${item.price.toLocaleString()}</td><td><strong>${currency}${(item.price*item.qty).toLocaleString()}</strong></td></tr>`).join('');
+  return `<div class="invoice-print"><div class="inv-header"><h2>🏪 ${shopName.toUpperCase()}</h2><p>Professional Business Invoice</p><p style="font-size:11px;color:#aaa">Powered by Smart Billing & Inventory v4.0 ☁️</p></div><div class="inv-info"><div class="inv-info-block"><p><strong>Customer:</strong> ${inv.customerName}</p>${inv.phone?`<p><strong>Phone:</strong> ${inv.phone}</p>`:''} ${inv.address?`<p><strong>Address:</strong> ${inv.address}</p>`:''}</div><div class="inv-info-block" style="text-align:right"><p><strong>Invoice:</strong> ${inv.id}</p><p><strong>Date:</strong> ${formatDate(inv.date)}</p>${inv.cashier?`<p><strong>Cashier:</strong> ${inv.cashier}</p>`:''}</div></div><table class="inv-table"><thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="inv-totals"><p>Subtotal: ${currency}${inv.subtotal.toLocaleString()}</p>${inv.discount?`<p>Discount: - ${currency}${inv.discount.toLocaleString()}</p>`:''} ${inv.taxAmt?`<p>Tax (${inv.taxPct}%): + ${currency}${inv.taxAmt.toFixed(2)}</p>`:''}<p class="grand">Grand Total: ${currency}${inv.grand.toFixed(2)}</p></div><div class="inv-footer"><p>✦ ${footer} ✦</p><p>Please keep this invoice for your records.</p><p style="margin-top:6px;color:#bbb">Returns accepted within ${returns} days with original invoice.</p></div></div>`;
+}
+
+function closeModal() { document.getElementById('invoiceModal').classList.remove('show'); }
+
+/* ══════════════════════════════════════════════════════════════
+   INVOICE HISTORY
+══════════════════════════════════════════════════════════════ */
+function renderHistory() {
+  const invoices = [...getInvoices()].reverse();
+  const tbody    = document.getElementById('history-body');
+  const currency = getSettings().currency || 'Rs.';
+  if (!invoices.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>No invoices yet</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = invoices.map(inv => `
+    <tr>
+      <td><strong style="color:var(--royal-blue)">${inv.id}</strong></td>
+      <td>${inv.customerName}</td>
+      <td>${formatDate(inv.date)}</td>
+      <td>${inv.items.length} item(s)</td>
+      <td><strong>${currency}${(inv.grand||0).toFixed(2)}</strong></td>
+      <td><button class="btn btn-sm btn-outline" onclick='showInvoiceModal(${JSON.stringify(inv).replace(/'/g,"&#39;")})'>🖨️ View</button></td>
+    </tr>`).join('');
+}
+
+async function clearHistory() {
+  if (!confirm('Clear all invoice history from cloud? This cannot be undone.')) return;
+  await saveInvoices([]);
+  renderHistory();
+  toast('Invoice history cleared from cloud.', 'warning');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT INVENTORY
+══════════════════════════════════════════════════════════════ */
+function printInventoryList() {
+  const inv      = getInventory();
+  const settings = getSettings();
+  const account  = getAccount();
+  const currency = settings.currency || 'Rs.';
+  const shopName = account.shopName  || settings.bizName || 'Smart Billing';
+  const threshold = settings.lowStockThreshold || 10;
+  const rows = inv.map((p,i) => {
+    let status = p.quantity===0 ? 'Out of Stock' : p.quantity<=threshold ? 'Low Stock' : 'In Stock';
+    let color  = p.quantity===0 ? '#991B1B' : p.quantity<=threshold ? '#92400E' : '#065F46';
+    return `<tr><td>${i+1}</td><td><strong>${p.name}</strong></td><td>${currency}${p.price.toLocaleString()}</td><td>${p.quantity}</td><td>${p.category||'General'}</td><td style="color:${color};font-weight:700">${status}</td></tr>`;
+  }).join('');
+  document.getElementById('invPrintArea').innerHTML = `<div class="print-doc" style="font-family:Poppins,sans-serif"><div style="text-align:center;padding:16px 0 12px;border-bottom:2px solid #1E3A8A;margin-bottom:16px"><h2 style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:900;color:#1E3A8A">🏪 ${shopName.toUpperCase()}</h2><p style="font-size:13px;color:#666;margin-top:4px">Inventory Report</p><p style="font-size:11px;color:#aaa">Generated: ${formatDateTime()}</p></div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead style="background:#1E3A8A"><tr><th style="padding:8px 10px;color:#fff;text-align:left">#</th><th style="padding:8px 10px;color:#fff;text-align:left">Product</th><th style="padding:8px 10px;color:#fff;text-align:left">Price</th><th style="padding:8px 10px;color:#fff;text-align:left">Quantity</th><th style="padding:8px 10px;color:#fff;text-align:left">Category</th><th style="padding:8px 10px;color:#fff;text-align:left">Status</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:20px;color:#888">No products</td></tr>'}</tbody></table><div style="text-align:right;margin-top:16px;font-size:13px"><p><strong>Total Products:</strong> ${inv.length}</p><p><strong>Total Stock Value:</strong> ${currency}${inv.reduce((s,p)=>s+p.price*p.quantity,0).toLocaleString()}</p><p><strong>Out of Stock:</strong> ${inv.filter(p=>p.quantity===0).length}</p></div></div>`;
+  document.getElementById('invPrintModal').classList.add('show');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT SALES HISTORY
+══════════════════════════════════════════════════════════════ */
+function printSalesHistory() {
+  const invoices = [...getInvoices()].reverse();
+  const settings = getSettings();
+  const account  = getAccount();
+  const currency = settings.currency || 'Rs.';
+  const shopName = account.shopName  || settings.bizName || 'Smart Billing';
+  const totalRev = invoices.reduce((s,i) => s + (i.grand||0), 0);
+  const rows = invoices.map(inv => `<tr><td style="padding:7px 10px;border-bottom:1px solid #eee"><strong style="color:#1E3A8A">${inv.id}</strong></td><td style="padding:7px 10px;border-bottom:1px solid #eee">${inv.customerName}</td><td style="padding:7px 10px;border-bottom:1px solid #eee">${formatDate(inv.date)}</td><td style="padding:7px 10px;border-bottom:1px solid #eee">${currency}${(inv.grand||0).toFixed(2)}</td><td style="padding:7px 10px;border-bottom:1px solid #eee">${inv.items.length}</td></tr>`).join('');
+  document.getElementById('salesPrintArea').innerHTML = `<div class="print-doc" style="font-family:Poppins,sans-serif"><div style="text-align:center;padding:16px 0 12px;border-bottom:2px solid #1E3A8A;margin-bottom:16px"><h2 style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:900;color:#1E3A8A">🏪 ${shopName.toUpperCase()}</h2><p style="font-size:13px;color:#666;margin-top:4px">Sales History Report</p><p style="font-size:11px;color:#aaa">Generated: ${formatDateTime()}</p></div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead style="background:#1E3A8A"><tr><th style="padding:8px 10px;color:#fff;text-align:left">Invoice ID</th><th style="padding:8px 10px;color:#fff;text-align:left">Customer</th><th style="padding:8px 10px;color:#fff;text-align:left">Date</th><th style="padding:8px 10px;color:#fff;text-align:left">Total</th><th style="padding:8px 10px;color:#fff;text-align:left">Items</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:#888">No sales yet</td></tr>'}</tbody></table><div style="text-align:right;margin-top:16px;font-size:13px;border-top:2px solid #1E3A8A;padding-top:12px"><p><strong>Total Invoices:</strong> ${invoices.length}</p><p><strong>Total Revenue:</strong> ${currency}${totalRev.toFixed(2)}</p><p style="font-size:15px;font-weight:800;color:#1E3A8A;margin-top:6px">Grand Total Sales: ${currency}${totalRev.toFixed(2)}</p></div></div>`;
+  document.getElementById('salesPrintModal').classList.add('show');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ACCOUNT
+══════════════════════════════════════════════════════════════ */
+function loadAccountForm() {
+  const acc = getAccount();
+  document.getElementById('acc-name').value    = acc.name     || '';
+  document.getElementById('acc-email').value   = acc.email    || (currentUser?.email||'');
+  document.getElementById('acc-phone').value   = acc.phone    || '';
+  document.getElementById('acc-shop').value    = acc.shopName || '';
+  document.getElementById('acc-address').value = acc.address  || '';
+  document.getElementById('acc-display-name').textContent  = acc.name  || 'User';
+  document.getElementById('acc-display-email').textContent = acc.email || (currentUser?.email||'');
+  const roleEl = document.getElementById('acc-role-display');
+  roleEl.innerHTML = `<span class="badge ${acc.role==='admin'?'badge-danger':'badge-info'}">${(acc.role||'user').toUpperCase()}</span>`;
+  const avatarEl = document.getElementById('acc-avatar-display');
+  avatarEl.textContent = (acc.name||'U')[0].toUpperCase();
+}
+
+async function saveAccount() {
+  const a = {
+    name:     document.getElementById('acc-name').value.trim(),
+    phone:    document.getElementById('acc-phone').value.trim(),
+    shopName: document.getElementById('acc-shop').value.trim(),
+    address:  document.getElementById('acc-address').value.trim(),
+  };
+  await saveAccountData(a);
+  document.getElementById('acc-display-name').textContent  = a.name;
+  document.getElementById('sidebar-uname').textContent     = a.name;
+  document.getElementById('sidebar-avatar').textContent    = (a.name||'U')[0].toUpperCase();
+  toast('Account saved to cloud! ✓', 'success');
+}
+
+async function changePassword() {
+  const np = document.getElementById('new-password').value;
+  const cp = document.getElementById('confirm-new-password').value;
+  if (!np) return toast('Enter a new password.', 'error');
+  if (np.length < 6) return toast('Password must be at least 6 characters.', 'error');
+  if (np !== cp) return toast('Passwords do not match.', 'error');
+  try {
+    await currentUser.updatePassword(np);
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-new-password').value = '';
+    toast('Password updated successfully! ✓', 'success');
+  } catch(e) {
+    if (e.code === 'auth/requires-recent-login') {
+      toast('Please sign out and sign in again to change your password.', 'warning');
+    } else {
+      toast('Error updating password.', 'error');
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SETTINGS
+══════════════════════════════════════════════════════════════ */
+function loadSettingsForm() {
+  const s = getSettings();
+  document.getElementById('set-biz-name').value   = s.bizName           || 'Smart Billing & Inventory';
+  document.getElementById('set-inv-prefix').value = s.invoicePrefix      || 'INV';
+  document.getElementById('set-tax').value         = s.defaultTax        || 0;
+  document.getElementById('set-currency').value    = s.currency          || 'Rs.';
+  document.getElementById('set-footer').value      = s.footer            || 'Thank you for your business!';
+  document.getElementById('set-low-stock').value   = s.lowStockThreshold || 10;
+  document.getElementById('set-returns').value     = s.returns           || 7;
+}
+
+async function saveSettings() {
+  const s = {
+    bizName:           document.getElementById('set-biz-name').value.trim(),
+    invoicePrefix:     document.getElementById('set-inv-prefix').value.trim() || 'INV',
+    defaultTax:        parseFloat(document.getElementById('set-tax').value) || 0,
+    currency:          document.getElementById('set-currency').value.trim() || 'Rs.',
+    footer:            document.getElementById('set-footer').value.trim(),
+    lowStockThreshold: parseInt(document.getElementById('set-low-stock').value) || 10,
+    returns:           parseInt(document.getElementById('set-returns').value) || 7,
+  };
+  await saveSettingsData(s);
+  toast('Settings saved to cloud! ✓', 'success');
+}
+
+async function resetSettings() {
+  await saveSettingsData({});
+  loadSettingsForm();
+  toast('Settings reset to defaults.', 'info');
+}
+
+async function clearAllData() {
+  if (!confirm('WARNING: This will permanently delete ALL your cloud inventory and invoice data. Are you absolutely sure?')) return;
+  const samples = [
+    { id:1001, name:'Basmati Rice', price:250, quantity:50, category:'Grocery', createdAt:new Date().toISOString() },
+    { id:1002, name:'Wheat Flour',  price:180, quantity:30, category:'Grocery', createdAt:new Date().toISOString() },
+    { id:1003, name:'Cooking Oil',  price:420, quantity:15, category:'Grocery', createdAt:new Date().toISOString() },
+    { id:1004, name:'Sugar',        price:120, quantity:5,  category:'Grocery', createdAt:new Date().toISOString() },
+    { id:1005, name:'Tea Leaves',   price:300, quantity:0,  category:'Grocery', createdAt:new Date().toISOString() },
+    { id:1006, name:'Mobile Cable', price:150, quantity:20, category:'Electronics', createdAt:new Date().toISOString() },
+    { id:1007, name:'LED Bulb',     price:200, quantity:35, category:'Electronics', createdAt:new Date().toISOString() },
+    { id:1008, name:'Soap Bar',     price:60,  quantity:80, category:'Personal Care', createdAt:new Date().toISOString() },
+  ];
+  await saveInventory(samples);
+  await saveInvoices([]);
+  await saveCounter(1000);
+  toast('All data cleared and reset in cloud! ✓', 'warning');
+  refreshDashboard();
+}
+
+function exportData() {
+  const data = { inventory:getInventory(), invoices:getInvoices(), settings:getSettings(), account:getAccount(), exportedAt:new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `SmartBilling_Backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Data exported successfully! ✓', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN PANEL — USER MANAGEMENT
+══════════════════════════════════════════════════════════════ */
+let allUsers = [];
+
+async function loadAdminUsers() {
+  document.getElementById('admin-users-body').innerHTML =
+    '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading users…</p></div></td></tr>';
+  try {
+    const snap = await db.collection('users').get();
+    allUsers = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
+    renderAdminUsers(allUsers);
+
+    const blocked = allUsers.filter(u => u.blocked).length;
+    document.getElementById('admin-user-count').textContent   = allUsers.length;
+    document.getElementById('admin-blocked-count').textContent = blocked;
+  } catch(e) {
+    document.getElementById('admin-users-body').innerHTML =
+      '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">❌</div><p>Could not load users. Check Firestore security rules.</p></div></td></tr>';
+    console.error(e);
+  }
+}
+
+function filterAdminUsers() {
+  const q = document.getElementById('admin-search').value.toLowerCase();
+  renderAdminUsers(allUsers.filter(u =>
+    (u.name||'').toLowerCase().includes(q) ||
+    (u.email||'').toLowerCase().includes(q) ||
+    (u.shopName||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderAdminUsers(users) {
+  const tbody = document.getElementById('admin-users-body');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👥</div><p>No users found</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map((u,i) => `
+    <tr class="${u.blocked?'user-row-blocked':''}">
+      <td>${i+1}</td>
+      <td><strong>${u.name||'—'}</strong></td>
+      <td>${u.email||'—'}</td>
+      <td>${u.shopName||'—'}</td>
+      <td><span class="badge ${u.role==='admin'?'badge-danger':'badge-info'}">${(u.role||'user').toUpperCase()}</span></td>
+      <td><span class="badge ${u.blocked?'badge-blocked':'badge-success'}">${u.blocked?'BLOCKED':'ACTIVE'}</span></td>
+      <td style="font-size:11px;color:var(--text-muted)">${u.createdAt?formatDate(u.createdAt):'—'}</td>
+      <td><div class="user-actions">
+        ${u.uid === currentUser?.uid
+          ? '<span style="font-size:11px;color:var(--text-muted)">You</span>'
+          : `<button class="btn btn-sm ${u.blocked?'btn-success':'btn-warning'}" onclick="toggleBlockUser('${u.uid}',${!u.blocked},'${u.name||u.email}')">${u.blocked?'✅ Unblock':'🚫 Block'}</button>
+             <button class="btn btn-sm btn-danger" onclick="confirmDeleteUser('${u.uid}','${u.name||u.email}')">🗑️</button>`
+        }
+      </div></td>
+    </tr>`).join('');
+}
+
+async function toggleBlockUser(uid, block, name) {
+  const action = block ? 'block' : 'unblock';
+  if (!confirm(`${block?'Block':'Unblock'} user "${name}"? ${block?'They will not be able to log in.':''}`)) return;
+  try {
+    await db.collection('users').doc(uid).update({ blocked: block });
+    const u = allUsers.find(u => u.uid === uid);
+    if (u) u.blocked = block;
+    renderAdminUsers(allUsers);
+    const blocked = allUsers.filter(u => u.blocked).length;
+    document.getElementById('admin-blocked-count').textContent = blocked;
+    toast(`User "${name}" ${action}ed successfully.`, block?'warning':'success');
+  } catch(e) {
+    toast('Error updating user. Check Firestore permissions.', 'error');
+  }
+}
+
+async function confirmDeleteUser(uid, name) {
+  if (!confirm(`Delete user "${name}" from the user list? Note: This only removes their Firestore profile; their Firebase Auth account must be deleted separately via the Firebase console.`)) return;
+  try {
+    await db.collection('users').doc(uid).update({ blocked: true, deleted: true });
+    allUsers = allUsers.filter(u => u.uid !== uid);
+    renderAdminUsers(allUsers);
+    document.getElementById('admin-user-count').textContent = allUsers.length;
+    toast(`User "${name}" removed from system.`, 'warning');
+  } catch(e) {
+    toast('Error removing user.', 'error');
+  }
+}
+
+function adminExportAllUsers() {
+  const data = { users:allUsers, exportedAt:new Date().toISOString(), exportedBy:currentUser?.email };
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `SmartBilling_Users_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('User list exported! ✓', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════════════════ */
+const TOAST_ICONS = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+function toast(msg, type='success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type==='success'?'':type);
+  el.innerHTML = `<span class="toast-icon">${TOAST_ICONS[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3D TILT
+══════════════════════════════════════════════════════════════ */
+let tiltFrame = null;
+document.addEventListener('mousemove', e => {
+  if (tiltFrame) return;
+  tiltFrame = requestAnimationFrame(() => {
+    tiltFrame = null;
+    document.querySelectorAll('.stat-card').forEach(card => {
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+      const dx = (e.clientX-cx)/20, dy = (e.clientY-cy)/20;
+      const dist = Math.hypot(e.clientX-cx, e.clientY-cy);
+      card.style.transform = dist<300 ? `perspective(800px) rotateY(${dx}deg) rotateX(${-dy}deg) translateY(-4px)` : '';
+    });
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════════ */
+// Clock
+setInterval(() => {
+  const el = document.getElementById('currentDate');
+  if (el) el.textContent = formatDateTime();
+}, 60000);
+
+// If Firebase config is placeholder, show a helpful message
+window.addEventListener('load', () => {
+  if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
+    hideLoading();
+    document.getElementById('auth-screen').classList.remove('hidden');
+    showAuthError('⚠️ Firebase not configured. Open this file in a text editor and fill in your Firebase project credentials in the firebaseConfig object. See the setup instructions in the script section.');
+  }
+});
+</script>
+
+<!-- ════════════════════════════════════════════════════════════
+     PWA — Service Worker + Install + Offline Detection
+════════════════════════════════════════════════════════════ -->
+<script>
+/* ── SERVICE WORKER REGISTRATION ── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+      console.log('[PWA] Service Worker registered:', reg.scope);
+
+      // Listen for updates
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            // New version available
+            document.getElementById('update-banner').classList.add('show');
+          }
+        });
+      });
+
+      // Message from SW (e.g. sync restored)
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data?.type === 'SYNC_RESTORED') {
+          toast('🔄 Back online — data syncing with cloud!', 'success');
+        }
+      });
+    } catch (err) {
+      console.warn('[PWA] SW registration failed:', err);
+    }
+  });
+}
+
+/* ── INSTALL PROMPT (A2HS) ── */
+let deferredInstallPrompt = null;
+const installBanner = document.getElementById('pwa-install-banner');
+const installBtn    = document.getElementById('pwa-install-btn');
+const dismissBtn    = document.getElementById('pwa-dismiss-btn');
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Only show banner if not already dismissed this session
+  if (!sessionStorage.getItem('pwa-banner-dismissed')) {
+    setTimeout(() => installBanner.classList.add('show'), 3000);
+  }
+});
+
+installBtn.addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  installBanner.classList.remove('show');
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    toast('🎉 SmartBilling installed! Find it on your home screen.', 'success');
+  }
+  deferredInstallPrompt = null;
+});
+
+dismissBtn.addEventListener('click', () => {
+  installBanner.classList.remove('show');
+  sessionStorage.setItem('pwa-banner-dismissed', '1');
+});
+
+// Hide banner if already installed
+window.addEventListener('appinstalled', () => {
+  installBanner.classList.remove('show');
+  deferredInstallPrompt = null;
+  toast('✅ SmartBilling has been installed!', 'success');
+});
+
+/* ── OFFLINE / ONLINE DETECTION ── */
+const offlineBanner = document.getElementById('offline-banner');
+
+function updateOnlineStatus() {
+  if (navigator.onLine) {
+    offlineBanner.classList.remove('show');
+    // Try to trigger background sync
+    if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then(reg => {
+        if ('sync' in reg) reg.sync.register('sync-data').catch(() => {});
+      });
+    }
+  } else {
+    offlineBanner.classList.add('show');
+    toast('📵 Gone offline — app continues working with cached data', 'warning');
+  }
+}
+
+window.addEventListener('online',  updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+// Check initial state after a brief delay (Firebase may override faster)
+setTimeout(updateOnlineStatus, 1000);
+
+/* ── STANDALONE MODE DETECTION ── */
+if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+  console.log('[PWA] Running in standalone (installed) mode');
+  // Update cloud indicator label
+  window.addEventListener('DOMContentLoaded', () => {
+    const indicator = document.querySelector('.cloud-indicator span');
+    if (indicator) indicator.textContent = 'Cloud Sync · PWA';
+  });
+}
+</script>
+
+<!-- ════════════════════════════════════════════════════════════
+     FIRESTORE SECURITY RULES (copy to Firebase Console)
+════════════════════════════════════════════════════════════
+Paste these rules in Firebase Console → Firestore → Rules:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users collection: each user owns their own doc, admin can read all
+    match /users/{userId} {
+      allow read:   if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+
+      // User's private data subcollection
+      match /data/{document} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+════════════════════════════════════════════════════════════ -->
+
+</body>
+</html>

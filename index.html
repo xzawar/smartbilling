@@ -475,6 +475,7 @@ body { padding-top: env(safe-area-inset-top); }
   .cloud-indicator::after { content: ' · PWA'; opacity: .5; }
 }
 
+@media print {
   body * { visibility:hidden !important; }
   .printable,.printable * { visibility:visible !important; }
   .printable { position:absolute; left:0; top:0; width:100%; padding:20px; }

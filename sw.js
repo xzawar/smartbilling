@@ -3,8 +3,8 @@
    Handles: offline caching, background sync, install prompt
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'smartbilling-v4.0';
-const SHELL_CACHE = 'smartbilling-shell-v4.0';
+const CACHE_NAME = 'smartbilling-v4.1';
+const SHELL_CACHE = 'smartbilling-shell-v4.1';
 
 /* Assets to cache immediately on install (app shell) */
 const PRECACHE_ASSETS = [

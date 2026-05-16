@@ -26,6 +26,11 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
 
+<!-- ══ PRECONNECT FOR SPEED ══ -->
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.gstatic.com">
+
 <!-- ══ FIREBASE SDK (compat mode — works without a bundler) ══ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -72,7 +77,7 @@ body { font-family:'Poppins',sans-serif; background:var(--bg); color:var(--text)
    LOADING SCREEN
 ══════════════════════════════════════════════════════════════ */
 #loading-screen {
-  position:fixed; inset:0; z-index:9999;
+  position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999;
   background:var(--gradient-main);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:24px; transition:opacity .5s;
@@ -89,7 +94,7 @@ body { font-family:'Poppins',sans-serif; background:var(--bg); color:var(--text)
    AUTH SCREEN
 ══════════════════════════════════════════════════════════════ */
 #auth-screen {
-  position:fixed; inset:0; z-index:5000;
+  position:fixed; top:0; right:0; bottom:0; left:0; z-index:5000;
   display:flex; align-items:center; justify-content:center;
   padding:20px;
 }
@@ -514,7 +519,6 @@ body { padding-top: env(safe-area-inset-top); }
 </style>
 </head>
 <body>
-  <h1>Hello world  </h1>
 
 <!-- ════════ PWA: OFFLINE BANNER ════════ -->
 <div id="offline-banner">
@@ -526,8 +530,6 @@ body { padding-top: env(safe-area-inset-top); }
   🆕 Update available!
   <button id="update-reload-btn" onclick="location.reload()">Refresh</button>
 </div>
-
-<div id="overlay-mobile"></div>
 
 <!-- ════════ PWA: INSTALL BANNER ════════ -->
 <div id="pwa-install-banner">
@@ -972,6 +974,11 @@ body { padding-top: env(safe-area-inset-top); }
 <script>
 'use strict';
 
+/* Toast icons — defined first because Firebase may fire onAuthStateChanged
+   synchronously during firebase.auth() if a cached session exists, which
+   calls toast() before the rest of the script has executed. */
+const TOAST_ICONS = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+
 /* ══════════════════════════════════════════════════════════════
    ▶ FIREBASE CONFIGURATION
    ──────────────────────────────────────────────────────────────
@@ -988,14 +995,15 @@ body { padding-top: env(safe-area-inset-top); }
 ══════════════════════════════════════════════════════════════ */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCxevALzekf5aoDKzWy8Zqv1sUabQpgYfc",
-  authDomain: "smartbilling-786.firebaseapp.com",
-  projectId: "smartbilling-786",
-  storageBucket: "smartbilling-786.firebasestorage.app",
-  messagingSenderId: "731641373519",
-  appId: "1:731641373519:web:8a78614d04976faddd5b3a",
-  measurementId: "G-Y29EXDE92Z"
+  apiKey: "AIzaSyCON7mfWhRm-UiCS6ggmeVz43CKVGwdiwU",
+  authDomain: "smartbilling-8a572.firebaseapp.com",
+  projectId: "smartbilling-8a572",
+  storageBucket: "smartbilling-8a572.firebasestorage.app",
+  messagingSenderId: "90760393794",
+  appId: "1:90760393794:web:d19fddd481859cbf7469db",
+  measurementId: "G-L7HSXD0XRZ"
 };
+
 
 // Secret code that grants Admin role during signup
 const ADMIN_SECRET_CODE = "ADMIN2024";
@@ -1009,6 +1017,10 @@ try {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db   = firebase.firestore();
+  
+  // AUTH PERSISTENCE — keeps user logged in, no re-login
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e => console.warn('Persistence error:', e));
+  
   // Enable offline persistence for better UX
   db.enablePersistence().catch(() => {});
 } catch(e) {
@@ -1020,6 +1032,11 @@ try {
    Keeps UI fast — all reads use cache, writes go to cache+cloud
 ══════════════════════════════════════════════════════════════ */
 let cache = { inventory:[], invoices:[], settings:{}, account:{}, counter:1000 };
+
+// Holds signup profile data to survive the onAuthStateChanged race condition.
+// createUserWithEmailAndPassword fires onAuthStateChanged BEFORE the Firestore
+// profile doc is written, so we pass the data through this variable instead.
+let pendingSignupData = null;
 
 // ── READ HELPERS (sync, use cache) ──
 const getInventory = () => cache.inventory;
@@ -1080,13 +1097,22 @@ function getNextInvoiceId() {
    LOAD USER DATA FROM FIRESTORE
 ══════════════════════════════════════════════════════════════ */
 async function loadUserData(uid) {
+  // Helper: try network first, fall back to Firestore local cache if offline
+  async function getDoc(ref) {
+    try {
+      return await ref.get();
+    } catch(e) {
+      return await ref.get({ source: 'cache' });
+    }
+  }
+
   try {
     const [invDoc, invoiceDoc, settingsDoc, counterDoc, userDoc] = await Promise.all([
-      userDataRef('inventory').get(),
-      userDataRef('invoices').get(),
-      userDataRef('settings').get(),
-      userDataRef('counter').get(),
-      db.collection('users').doc(uid).get()
+      getDoc(userDataRef('inventory')),
+      getDoc(userDataRef('invoices')),
+      getDoc(userDataRef('settings')),
+      getDoc(userDataRef('counter')),
+      getDoc(db.collection('users').doc(uid))
     ]);
 
     cache.inventory = invDoc.exists    ? (invDoc.data().items    || []) : [];
@@ -1112,7 +1138,10 @@ async function loadUserData(uid) {
 
   } catch(e) {
     console.error('loadUserData error:', e);
-    toast('Error loading cloud data. Please refresh.', 'error');
+    const msg = navigator.onLine
+      ? 'Error loading your data. Please refresh.'
+      : 'You are offline. Showing cached data — changes will sync when back online.';
+    toast(msg, navigator.onLine ? 'error' : 'warning');
   }
 }
 
@@ -1123,43 +1152,86 @@ auth.onAuthStateChanged(async user => {
   hideLoading();
   if (user) {
     currentUser = user;
-    // Load user profile from Firestore
-    const userDoc = await db.collection('users').doc(user.uid).get();
-    if (!userDoc.exists) {
-      // shouldn't happen but handle gracefully
-      await auth.signOut();
+
+    try {
+      // Load user profile from Firestore.
+      // If the device is offline, fall back to the local Firestore cache so
+      // the user can still log in with their previously cached profile.
+      let userDoc;
+      try {
+        userDoc = await db.collection('users').doc(user.uid).get();
+      } catch(fetchErr) {
+        // Network unavailable — try the local cache instead
+        try {
+          userDoc = await db.collection('users').doc(user.uid).get({ source: 'cache' });
+        } catch(cacheErr) {
+          // No cached profile either — can't continue
+          throw new Error('You are offline and no cached data was found. Please connect to the internet and try again.');
+        }
+      }
+
+      if (!userDoc.exists) {
+        // Race condition: onAuthStateChanged fired before handleSignup finished
+        // writing the Firestore profile. Use pendingSignupData if available.
+        if (pendingSignupData) {
+          try {
+            await db.collection('users').doc(user.uid).set(pendingSignupData);
+          } catch(e) {
+            console.warn('Profile write in onAuthStateChanged failed:', e);
+          }
+          pendingSignupData = null;
+          // Re-fetch so the rest of the handler works normally
+          userDoc = await db.collection('users').doc(user.uid).get();
+        }
+        if (!userDoc.exists) {
+          // Truly missing profile — sign out and show auth
+          await auth.signOut();
+          showAuthScreen();
+          return;
+        }
+      }
+
+      pendingSignupData = null; // clear on every successful load
+      const profile = userDoc.data();
+
+      // Check if blocked
+      if (profile.blocked) {
+        await auth.signOut();
+        showAuthScreen();
+        showAuthError('Your account has been blocked by the administrator. Please contact support.');
+        return;
+      }
+
+      currentUserRole = profile.role || 'user';
+
+      // Load user data
+      await loadUserData(user.uid);
+
+      // Update UI
+      updateSidebarUser(profile, currentUserRole);
+      applyRoleUI(currentUserRole);
+
+      // Show app
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('main-app').classList.add('visible');
+
+      // Init dashboard
+      refreshDashboard();
+      document.getElementById('currentDate').textContent = formatDateTime();
+
+    } catch(err) {
+      // If anything in the login flow throws (Firestore permission denied,
+      // network error, etc.) we must never leave the user on a blank screen.
+      console.error('Auth flow error:', err);
+      pendingSignupData = null;
+      try { await auth.signOut(); } catch(_) {}
       showAuthScreen();
-      return;
+      showAuthError('⚠️ Sign-in error: ' + (err.message || 'Please check your connection and try again.'));
     }
-    const profile = userDoc.data();
-
-    // Check if blocked
-    if (profile.blocked) {
-      await auth.signOut();
-      showAuthScreen();
-      showAuthError('Your account has been blocked by the administrator. Please contact support.');
-      return;
-    }
-
-    currentUserRole = profile.role || 'user';
-
-    // Load user data
-    await loadUserData(user.uid);
-
-    // Update UI
-    updateSidebarUser(profile, currentUserRole);
-    applyRoleUI(currentUserRole);
-
-    // Show app
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('main-app').classList.add('visible');
-
-    // Init dashboard
-    refreshDashboard();
-    document.getElementById('currentDate').textContent = formatDateTime();
 
   } else {
     currentUser = null;
+    pendingSignupData = null;
     document.getElementById('main-app').classList.remove('visible');
     showAuthScreen();
   }
@@ -1215,15 +1287,24 @@ async function handleLogin() {
   const remember = document.getElementById('login-remember').checked;
 
   if (!email || !password) return showAuthError('Please enter email and password.');
+  
+  // INSTANT FEEDBACK — show spinner immediately
   const btn = document.getElementById('login-btn');
-  btn.disabled = true; btn.textContent = '⏳ Signing in…';
+  btn.disabled = true; 
+  btn.textContent = '🔄';
 
   try {
     const persistence = remember
       ? firebase.auth.Auth.Persistence.LOCAL
       : firebase.auth.Auth.Persistence.SESSION;
     await auth.setPersistence(persistence);
-    await auth.signInWithEmailAndPassword(email, password);
+    const loginTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject({ code: 'auth/timeout', message: 'Request timed out. Please check your internet connection and try again.' }), 30000)
+    );
+    await Promise.race([
+      auth.signInWithEmailAndPassword(email, password),
+      loginTimeout
+    ]);
     // onAuthStateChanged handles the rest
   } catch(e) {
     showAuthError(friendlyAuthError(e.code));
@@ -1248,28 +1329,58 @@ async function handleSignup() {
 
   const role = (code === ADMIN_SECRET_CODE) ? 'admin' : 'user';
 
+  // Check if Firebase auth is ready
+  if (!auth) {
+    return showAuthError('⚠️ Firebase is not initialized. Please refresh the page and try again.');
+  }
+
   const btn = document.getElementById('signup-btn');
-  btn.disabled = true; btn.textContent = '⏳ Creating account…';
+  btn.disabled = true; 
+  btn.textContent = '🔄';
+
+  // Build the profile object we want to save to Firestore
+  const profileData = {
+    name,
+    shopName: shop || name + "'s Store",
+    email,
+    phone:   '',
+    address: '',
+    role,
+    blocked: false,
+    createdAt: new Date().toISOString()
+  };
+
+  // Set BEFORE calling createUserWithEmailAndPassword so that the
+  // onAuthStateChanged handler (which fires immediately after auth creation,
+  // before our Firestore .set() below) can access the profile data.
+  pendingSignupData = profileData;
 
   try {
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    // Race createUserWithEmailAndPassword against a 30-second timeout so the
+    // button never stays frozen forever on a slow / unreachable connection.
+    const authTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject({ code: 'auth/timeout', message: 'Request timed out. Please check your internet connection and try again.' }), 30000)
+    );
+    const cred = await Promise.race([
+      auth.createUserWithEmailAndPassword(email, pass),
+      authTimeout
+    ]);
     const uid  = cred.user.uid;
 
-    // Create user profile in Firestore
-    await db.collection('users').doc(uid).set({
-      name,
-      shopName: shop || name + "'s Store",
-      email,
-      phone:   '',
-      address: '',
-      role,
-      blocked: false,
-      createdAt: new Date().toISOString()
-    });
+    // Write profile to Firestore (onAuthStateChanged may have already done
+    // this via pendingSignupData, so use merge:true to avoid overwriting)
+    try {
+      await db.collection('users').doc(uid).set(profileData, { merge: true });
+    } catch(firestoreErr) {
+      console.warn('Firestore profile write failed (non-fatal):', firestoreErr);
+    }
+    pendingSignupData = null;
 
     toast(`Welcome, ${name}! Account created successfully.`, 'success');
     // onAuthStateChanged handles redirect
   } catch(e) {
+    pendingSignupData = null;
+    console.error('Signup error code:', e.code, 'message:', e.message);
     showAuthError(friendlyAuthError(e.code));
     btn.disabled = false; btn.innerHTML = '🚀 Create Account';
   }
@@ -1289,16 +1400,31 @@ async function handleForgotPassword() {
 
 function friendlyAuthError(code) {
   const map = {
-    'auth/user-not-found':       'No account found with this email.',
-    'auth/wrong-password':       'Incorrect password. Please try again.',
-    'auth/email-already-in-use': 'This email is already registered.',
-    'auth/invalid-email':        'Please enter a valid email address.',
-    'auth/weak-password':        'Password must be at least 6 characters.',
-    'auth/too-many-requests':    'Too many attempts. Please try again later.',
-    'auth/network-request-failed':'Network error. Check your internet connection.',
-    'auth/user-disabled':        'This account has been disabled.',
+    'auth/user-not-found':            'No account found with this email.',
+    'auth/wrong-password':            'Incorrect password. Please try again.',
+    'auth/email-already-in-use':      'This email is already registered. Try signing in instead.',
+    'auth/invalid-email':             'Please enter a valid email address.',
+    'auth/weak-password':             'Password must be at least 6 characters.',
+    'auth/too-many-requests':         'Too many attempts. Please wait a few minutes and try again.',
+    'auth/network-request-failed':    'Network error. Please check your internet connection.',
+    'auth/user-disabled':             'This account has been disabled. Contact support.',
+    'auth/operation-not-allowed':     'Email/password sign-in is not enabled. Please ask the administrator to enable it in the Firebase Console → Authentication → Sign-in method.',
+    'auth/configuration-not-found':   'Firebase Authentication is not properly configured. Please ask the administrator to enable Email/Password sign-in in the Firebase Console.',
+    'auth/invalid-api-key':           'Invalid Firebase API key. Please check the app configuration.',
+    'auth/app-deleted':               'Firebase app configuration error. Please refresh the page.',
+    'auth/invalid-credential':        'Invalid credentials. Please check your email and password.',
+    'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method.',
+    'auth/requires-recent-login':     'Please sign out and sign in again to continue.',
+    'auth/popup-blocked':             'Sign-in popup was blocked. Please allow popups for this site.',
+    'auth/expired-action-code':       'This link has expired. Please request a new one.',
+    'auth/invalid-action-code':       'This link is invalid or has already been used.',
+    'auth/missing-email':             'Please enter your email address.',
+    'auth/internal-error':            'An internal error occurred. Please try again in a moment.',
+    'auth/timeout':                   'Connection timed out. Please check your internet and try again.',
   };
-  return map[code] || 'An error occurred. Please try again.';
+  if (map[code]) return map[code];
+  // Show the raw code so issues can be diagnosed
+  return `Sign-in error (${code || 'unknown'}). Please try again or contact support.`;
 }
 
 async function handleLogout() {
@@ -1322,11 +1448,9 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('hamburger').classList.remove('open');
-  const overlay = document.getElementById('overlay-mobile');
-  if (overlay) overlay.style.display = 'none';
+  document.getElementById('overlay-mobile').style.display = 'none';
 }
-const overlayMobile = document.getElementById('overlay-mobile');
-if (overlayMobile) overlayMobile.onclick = closeSidebar;
+document.getElementById('overlay-mobile').onclick = closeSidebar;
 
 const pageTitles = { dashboard:'📊 Dashboard', billing:'🧾 Billing', inventory:'📦 Inventory', history:'📋 Invoice History', account:'👤 My Account', settings:'⚙️ Settings', admin:'🛡️ Admin Panel' };
 
@@ -1927,7 +2051,6 @@ function adminExportAllUsers() {
 /* ══════════════════════════════════════════════════════════════
    TOAST
 ══════════════════════════════════════════════════════════════ */
-var TOAST_ICONS = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
 function toast(msg, type='success') {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
@@ -1970,7 +2093,32 @@ window.addEventListener('load', () => {
     hideLoading();
     document.getElementById('auth-screen').classList.remove('hidden');
     showAuthError('⚠️ Firebase not configured. Open this file in a text editor and fill in your Firebase project credentials in the firebaseConfig object. See the setup instructions in the script section.');
+    return;
   }
+
+  // Detect file:// protocol — Firebase Auth does not work without a web server.
+  if (location.protocol === 'file:') {
+    hideLoading();
+    showAuthScreen();
+    showAuthError(
+      '⚠️ Local file detected. Firebase requires a web server to work. ' +
+      'Please use VSCode Live Server (right-click index.html → Open with Live Server) ' +
+      'and add "localhost" to your Firebase Console → Authentication → Authorized Domains.'
+    );
+    return;
+  }
+
+  // Safety net: if Firebase fails to initialise (CDN blocked / network timeout)
+  // onAuthStateChanged never fires and the loading screen stays forever.
+  // After 4s we force-hide it and show the auth screen so the user is never stuck.
+  setTimeout(() => {
+    const ls = document.getElementById('loading-screen');
+    if (ls && !ls.classList.contains('hidden')) {
+      hideLoading();
+      showAuthScreen();
+      showAuthError('⚠️ Connection timeout. Please check your internet and refresh the page.');
+    }
+  }, 4000);
 });
 </script>
 

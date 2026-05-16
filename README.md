@@ -55,33 +55,7 @@ const firebaseConfig = {
 
 ## Step 2: Host the Files (PWA REQUIRES a web server)
 
-> ⚠️ A PWA **cannot** run from a local file (`file://`). It must be served over HTTP/HTTPS.
-
-For local development, use `localhost` with a simple server instead of opening `index.html` directly.
-
-### Local development server (recommended)
-
-From the project folder:
-
-```powershell
-cd "C:\Users\786\OneDrive\Desktop\SmartBilling_PWA"
-python -m http.server 8000
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8000
-```
-
-If you prefer Node:
-
-```powershell
-cd "C:\Users\786\OneDrive\Desktop\SmartBilling_PWA"
-npx http-server -p 8000
-```
-
-`http://localhost:8000` is enough for development and service workers.
+> ⚠️ A PWA **cannot** run from a local file (`file://`). It must be served over HTTPS.
 
 ### Option A — Firebase Hosting (Recommended, Free)
 

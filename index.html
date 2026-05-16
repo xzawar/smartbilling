@@ -1204,20 +1204,21 @@ auth.onAuthStateChanged(async user => {
 
       currentUserRole = profile.role || 'user';
 
-      // Load user data
-      await loadUserData(user.uid);
-
-      // Update UI
+      // Update UI FIRST (instant)
       updateSidebarUser(profile, currentUserRole);
       applyRoleUI(currentUserRole);
 
-      // Show app
+      // SHOW APP IMMEDIATELY (don't wait for data)
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('main-app').classList.add('visible');
 
-      // Init dashboard
-      refreshDashboard();
-      document.getElementById('currentDate').textContent = formatDateTime();
+      // Load data in BACKGROUND (non-blocking)
+      loadUserData(user.uid).then(() => {
+        // Data loaded, refresh dashboard
+        refreshDashboard();
+        document.getElementById('currentDate').textContent = formatDateTime();
+      });
+
 
     } catch(err) {
       // If anything in the login flow throws (Firestore permission denied,
